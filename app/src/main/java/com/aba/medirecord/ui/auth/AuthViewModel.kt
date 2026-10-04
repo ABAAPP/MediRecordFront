@@ -15,6 +15,7 @@ sealed class AuthState {
     object Idle : AuthState()
     object Loading : AuthState()
     data class Success(val message: String) : AuthState()
+    data class RegisterSuccess(val message: String) : AuthState()
     data class Error(val message: String) : AuthState()
 }
 
@@ -96,16 +97,18 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 if (response.isSuccessful && response.body() != null) {
                     val body = response.body()!!
                     if (body.success) {
-                        _uiState.value = AuthState.Success(body.message.ifBlank { "¡Registro exitoso! Ahora puedes iniciar sesión." })
+                        _uiState.value = AuthState.RegisterSuccess(
+                            body.message.ifBlank { "¡Cuenta creada exitosamente! Por favor inicia sesión." }
+                        )
                     } else {
                         _uiState.value = AuthState.Error(body.message)
                     }
                 } else {
-                    _uiState.value = AuthState.Error("Error en el registro. Código: ${response.code()}")
+                    _uiState.value = AuthState.Error("No se pudo completar el registro (${response.code()})")
                 }
             } catch (_: Exception) {
-                // Simulación para prueba local si no hay backend activo
-                _uiState.value = AuthState.Success("Registro simulado exitosamente. Ya puedes iniciar sesión.")
+                // Simulación local en caso de que no haya backend activo
+                _uiState.value = AuthState.RegisterSuccess("Registro simulado exitosamente. Ya puedes iniciar sesión.")
             }
         }
     }

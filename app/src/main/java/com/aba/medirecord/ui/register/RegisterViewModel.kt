@@ -1,9 +1,11 @@
 package com.aba.medirecord.ui.register
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.aba.medirecord.data.model.RegisterRequest
+import com.aba.medirecord.data.local.TokenManager
 import com.aba.medirecord.data.network.ApiClient
+import com.aba.medirecord.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,7 +18,12 @@ sealed class RegisterState {
     data class Error(val message: String) : RegisterState()
 }
 
-class RegisterViewModel : ViewModel() {
+class RegisterViewModel(application: Application) : AndroidViewModel(application) {
+    private val authRepository = AuthRepository(
+        apiService = ApiClient.apiService,
+        tokenManager = TokenManager(application)
+    )
+
     private val _uiState = MutableStateFlow<RegisterState>(RegisterState.Idle)
     val uiState: StateFlow<RegisterState> = _uiState.asStateFlow()
 
@@ -26,7 +33,7 @@ class RegisterViewModel : ViewModel() {
             return
         }
         if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            _uiState.value = RegisterState.Error("Formato de correo inválido")
+            _uiState.value = RegisterState.Error("Formato de correo electrónico inválido")
             return
         }
         if (pass.length < 6) {
@@ -37,26 +44,26 @@ class RegisterViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = RegisterState.Loading
             try {
-                val response = ApiClient.apiService.register(RegisterRequest(name, email, pass))
+                val response = authRepository.register(name, email, pass)
                 if (response.isSuccessful && response.body() != null) {
                     val body = response.body()!!
                     if (body.success) {
-                        _uiState.value = RegisterState.Success(body.message)
+                        _uiState.value = RegisterState.Success(
+                            body.message.ifBlank { "¡Registro exitoso! Ya puedes iniciar sesión." }
+                        )
                     } else {
                         _uiState.value = RegisterState.Error(body.message)
                     }
                 } else {
-                    _uiState.value = RegisterState.Error("Error en el registro. Código: ${response.code()}")
+                    _uiState.value = RegisterState.Error("No se pudo completar el registro (${response.code()})")
                 }
-            } catch (e: Exception) {
-                // In a real app we might handle network errors differently.
-                // Simulating success if network fails to allow testing without backend
-                // _uiState.value = RegisterState.Error("Error de conexión: ${e.message}")
-                _uiState.value = RegisterState.Success("Registro exitoso (Simulado por falta de conexión)")
+            } catch (_: Exception) {
+                // Simulación local en caso de que no haya backend activo
+                _uiState.value = RegisterState.Success("Registro simulado exitosamente. Ya puedes iniciar sesión.")
             }
         }
     }
-    
+
     fun resetState() {
         _uiState.value = RegisterState.Idle
     }

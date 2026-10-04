@@ -1,5 +1,6 @@
 package com.aba.medirecord.ui.auth
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -12,7 +13,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Lock
@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -39,8 +40,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 fun AuthScreen(
     onAuthSuccess: (String) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: AuthViewModel = viewModel()
+    viewModel: AuthViewModel = viewModel(),
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val selectedTab by viewModel.selectedTab.collectAsState()
 
@@ -50,9 +52,16 @@ fun AuthScreen(
     var passwordVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState) {
-        if (uiState is AuthState.Success) {
-            onAuthSuccess((uiState as AuthState.Success).message)
-            viewModel.resetState()
+        when (val state = uiState) {
+            is AuthState.Success -> {
+                onAuthSuccess(state.message)
+                viewModel.resetState()
+            }
+            is AuthState.RegisterSuccess -> {
+                Toast.makeText(context, state.message, Toast.LENGTH_LONG).show()
+                viewModel.setTab(AuthTab.LOGIN)
+            }
+            else -> {}
         }
     }
 
@@ -63,7 +72,7 @@ fun AuthScreen(
                 Brush.verticalGradient(
                     colors = listOf(
                         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                        MaterialTheme.colorScheme.background
+                        MaterialTheme.colorScheme.background,
                     )
                 )
             )
@@ -77,7 +86,7 @@ fun AuthScreen(
         ) {
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Header con Icono de Salud y Logotipo
+            // Header con Logotipo
             HealthHeader()
 
             Spacer(modifier = Modifier.height(28.dp))
@@ -109,7 +118,7 @@ fun AuthScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = if (selectedTab == AuthTab.LOGIN) "Bienvenido de nuevo" else "Crea tu Expediente",
+                        text = if (selectedTab == AuthTab.LOGIN) "Bienvenido de nuevo" else "Crea tu Cuenta",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
@@ -120,7 +129,7 @@ fun AuthScreen(
                         text = if (selectedTab == AuthTab.LOGIN) 
                             "Accede a tus registros e historial de salud" 
                         else 
-                            "Regístrate para gestionar tus consultas y tratamientos",
+                            "Regístrate para gestionar tus medicamentos y recordatorios",
                         style = MaterialTheme.typography.bodyMedium.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         ),
@@ -232,7 +241,7 @@ fun AuthScreen(
                                 Text(
                                     text = (uiState as AuthState.Error).message,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
-                                    style = MaterialTheme.colorScheme.errorContainer.let { MaterialTheme.typography.bodySmall }
+                                    style = MaterialTheme.typography.bodySmall
                                 )
                             }
                         }
@@ -275,7 +284,6 @@ fun AuthScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // Sección de características / insignias de salud
             HealthTrustBadges()
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -323,7 +331,7 @@ private fun HealthHeader() {
 @Composable
 private fun AuthTabSelector(
     selectedTab: AuthTab,
-    onTabSelected: (AuthTab) -> Unit
+    onTabSelected: (AuthTab) -> Unit,
 ) {
     Surface(
         modifier = Modifier
