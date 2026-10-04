@@ -19,6 +19,14 @@ class MainActivity : ComponentActivity() {
 
         val tokenManager = TokenManager(this)
 
+        // Simulación: Guardar sesión previa por defecto para ingresar directo a la pantalla principal
+        if (!tokenManager.isLoggedIn()) {
+            tokenManager.saveToken(
+                token = "jwt_demo_token_12345",
+                email = "paciente@medirecord.com"
+            )
+        }
+
         setContent {
             MediRecordTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->

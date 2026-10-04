@@ -21,7 +21,7 @@ sealed class RegisterState {
 class RegisterViewModel(application: Application) : AndroidViewModel(application) {
     private val authRepository = AuthRepository(
         apiService = ApiClient.apiService,
-        tokenManager = TokenManager(application)
+        tokenManager = TokenManager(application),
     )
 
     private val _uiState = MutableStateFlow<RegisterState>(RegisterState.Idle)
@@ -45,7 +45,7 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
             _uiState.value = RegisterState.Loading
             try {
                 val response = authRepository.register(name, email, pass)
-                if (response.isSuccessful && response.body() != null) {
+                if (response != null && response.isSuccessful && response.body() != null) {
                     val body = response.body()!!
                     if (body.success) {
                         _uiState.value = RegisterState.Success(
@@ -54,11 +54,12 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                     } else {
                         _uiState.value = RegisterState.Error(body.message)
                     }
-                } else {
+                } else if (response != null) {
                     _uiState.value = RegisterState.Error("No se pudo completar el registro (${response.code()})")
+                } else {
+                    _uiState.value = RegisterState.Success("Registro simulado exitosamente. Ya puedes iniciar sesión.")
                 }
             } catch (_: Exception) {
-                // Simulación local en caso de que no haya backend activo
                 _uiState.value = RegisterState.Success("Registro simulado exitosamente. Ya puedes iniciar sesión.")
             }
         }
