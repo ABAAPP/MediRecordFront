@@ -4,9 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.aba.medirecord.data.local.TokenManager
-import com.aba.medirecord.data.model.LoginRequest
-import com.aba.medirecord.data.model.RegisterRequest
 import com.aba.medirecord.data.network.ApiClient
+import com.aba.medirecord.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,7 +24,10 @@ enum class AuthTab {
 }
 
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
-    private val tokenManager = TokenManager(application)
+    private val authRepository = AuthRepository(
+        apiService = ApiClient.apiService,
+        tokenManager = TokenManager(application)
+    )
 
     private val _uiState = MutableStateFlow<AuthState>(AuthState.Idle)
     val uiState: StateFlow<AuthState> = _uiState.asStateFlow()
@@ -51,12 +53,12 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.value = AuthState.Loading
             try {
-                val response = ApiClient.apiService.login(LoginRequest(email, pass))
+                val response = authRepository.login(email, pass)
                 if (response.isSuccessful && response.body() != null) {
                     val body = response.body()!!
                     if (body.success) {
                         val token = body.token ?: "jwt_token_${System.currentTimeMillis()}"
-                        tokenManager.saveToken(token, email)
+                        authRepository.saveSession(token, email)
                         _uiState.value = AuthState.Success(body.message.ifBlank { "¡Inicio de sesión exitoso!" })
                     } else {
                         _uiState.value = AuthState.Error(body.message)
@@ -64,10 +66,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     _uiState.value = AuthState.Error("Credenciales incorrectas o error en el servidor (${response.code()})")
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Simulación para prueba local si no hay backend activo
                 val simToken = "jwt_simulated_token_${System.currentTimeMillis()}"
-                tokenManager.saveToken(simToken, email)
+                authRepository.saveSession(simToken, email)
                 _uiState.value = AuthState.Success("Inicio de sesión exitoso")
             }
         }
@@ -90,7 +92,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.value = AuthState.Loading
             try {
-                val response = ApiClient.apiService.register(RegisterRequest(name, email, pass))
+                val response = authRepository.register(name, email, pass)
                 if (response.isSuccessful && response.body() != null) {
                     val body = response.body()!!
                     if (body.success) {
@@ -101,7 +103,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     _uiState.value = AuthState.Error("Error en el registro. Código: ${response.code()}")
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Simulación para prueba local si no hay backend activo
                 _uiState.value = AuthState.Success("Registro simulado exitosamente. Ya puedes iniciar sesión.")
             }
