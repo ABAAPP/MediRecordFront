@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Favorite
@@ -38,9 +39,14 @@ fun HomeScreen(
     userEmail: String?,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
+    onNavigateToAddMedication: () -> Unit = {},
     viewModel: HomeViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.loadTodayMedications()
+    }
     val currentDateStr = remember {
         SimpleDateFormat("EEEE, d 'de' MMMM", Locale("es", "ES")).format(Date())
             .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
@@ -85,6 +91,25 @@ fun HomeScreen(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = onNavigateToAddMedication,
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Registrar medicamento"
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Nuevo Medicamento",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
         }
     ) { innerPadding ->
         Column(
@@ -117,7 +142,8 @@ fun HomeScreen(
 
                 is HomeUiState.Empty -> {
                     EmptyMedicationsView(
-                        onReload = { viewModel.loadTodayMedications() }
+                        onReload = { viewModel.loadTodayMedications() },
+                        onRegisterClick = onNavigateToAddMedication
                     )
                 }
 
@@ -381,6 +407,7 @@ private fun MedicationDoseCard(
 @Composable
 private fun EmptyMedicationsView(
     onReload: () -> Unit,
+    onRegisterClick: () -> Unit = {},
 ) {
     Box(
         modifier = Modifier
@@ -435,6 +462,21 @@ private fun EmptyMedicationsView(
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
+
+                Button(
+                    onClick = onRegisterClick,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(text = "Registrar medicamento")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
 
                 OutlinedButton(onClick = onReload) {
                     Icon(
