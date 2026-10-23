@@ -1,5 +1,7 @@
 package com.aba.medirecord
 
+import com.aba.medirecord.data.model.CompleteReminderRequest
+import com.aba.medirecord.data.model.CompleteReminderResponse
 import com.aba.medirecord.data.model.LoginRequest
 import com.aba.medirecord.data.model.LoginResponse
 import com.aba.medirecord.data.model.MedicationDose
@@ -89,6 +91,31 @@ class FakeApiService : ApiService {
             Response.error(500, okhttp3.ResponseBody.create(null, "Error al obtener recordatorios"))
         } else {
             Response.success(simulatedReminders)
+        }
+    }
+
+    override suspend fun markReminderAsCompleted(
+        reminderId: String,
+        request: CompleteReminderRequest,
+    ): Response<CompleteReminderResponse> {
+        return if (shouldFail) {
+            Response.error(500, okhttp3.ResponseBody.create(null, "No se pudo completar la operación en el servidor"))
+        } else {
+            simulatedReminders = simulatedReminders.map {
+                if (it.id == reminderId) {
+                    it.copy(isCompleted = true, completedAt = request.completedAt)
+                } else {
+                    it
+                }
+            }
+            Response.success(
+                CompleteReminderResponse(
+                    success = true,
+                    message = "Recordatorio marcado como realizado exitosamente",
+                    reminderId = reminderId,
+                    completedAt = request.completedAt
+                )
+            )
         }
     }
 }
