@@ -1,5 +1,7 @@
 package com.aba.medirecord.data.network
 
+import com.aba.medirecord.data.model.CompleteReminderRequest
+import com.aba.medirecord.data.model.CompleteReminderResponse
 import com.aba.medirecord.data.model.LoginRequest
 import com.aba.medirecord.data.model.LoginResponse
 import com.aba.medirecord.data.model.MedicationDose
@@ -38,4 +40,10 @@ interface ApiService {
 
     @GET("api/reminders")
     suspend fun getReminders(@Query("userEmail") userEmail: String? = null): Response<List<MedicationReminder>>
+
+    @POST("api/reminders/{id}/complete")
+    suspend fun markReminderAsCompleted(
+        @Path("id") reminderId: String,
+        @Body request: CompleteReminderRequest,
+    ): Response<CompleteReminderResponse>
 }

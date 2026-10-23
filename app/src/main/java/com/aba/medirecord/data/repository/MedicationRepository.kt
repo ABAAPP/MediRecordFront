@@ -1,5 +1,7 @@
 package com.aba.medirecord.data.repository
 
+import com.aba.medirecord.data.model.CompleteReminderRequest
+import com.aba.medirecord.data.model.CompleteReminderResponse
 import com.aba.medirecord.data.model.MedicationDose
 import com.aba.medirecord.data.model.MedicationReminder
 import com.aba.medirecord.data.model.MedicationRequest
@@ -8,6 +10,9 @@ import com.aba.medirecord.data.model.ScheduleRequest
 import com.aba.medirecord.data.model.ScheduleResponse
 import com.aba.medirecord.data.network.ApiService
 import kotlinx.coroutines.withTimeoutOrNull
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 class MedicationRepository(
@@ -15,6 +20,11 @@ class MedicationRepository(
 ) {
     companion object {
         val ALL_WEEK_DAYS = listOf("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
+
+        // Registro persistente en sesión de recordatorios marcados como realizados (id -> hora de realización)
+        val completedRemindersRegistry = mutableMapOf(
+            "1" to "08:05 AM"
+        )
 
         // Lista compartida en memoria para simulación cuando no hay backend activo
         val localDoses = mutableListOf(
@@ -26,7 +36,8 @@ class MedicationRepository(
                 isCompleted = true,
                 instructions = "Con alimentos",
                 frequency = "Cada 8 horas (3 veces al día)",
-                selectedDays = ALL_WEEK_DAYS
+                selectedDays = ALL_WEEK_DAYS,
+                completedAt = "08:05 AM"
             ),
             MedicationDose(
                 id = "2",
@@ -97,18 +108,45 @@ class MedicationRepository(
             }
         }
 
+        fun applyPersistedCompletionToReminder(reminder: MedicationReminder): MedicationReminder {
+            val persistedTime = completedRemindersRegistry[reminder.id]
+                ?: completedRemindersRegistry[reminder.medicationId]
+            return if (persistedTime != null) {
+                reminder.copy(
+                    isCompleted = true,
+                    completedAt = reminder.completedAt ?: persistedTime
+                )
+            } else {
+                reminder
+            }
+        }
+
+        fun applyPersistedCompletionToDose(dose: MedicationDose): MedicationDose {
+            val persistedTime = completedRemindersRegistry[dose.id]
+            return if (persistedTime != null) {
+                dose.copy(
+                    isCompleted = true,
+                    completedAt = dose.completedAt ?: persistedTime
+                )
+            } else {
+                dose
+            }
+        }
+
         fun MedicationDose.toReminder(defaultUserEmail: String? = null): MedicationReminder {
+            val syncedDose = applyPersistedCompletionToDose(this)
             return MedicationReminder(
-                id = this.id,
-                medicationId = this.id,
-                medicationName = this.name,
-                dosage = this.dosage,
-                scheduledTime = this.scheduledTime,
-                frequency = this.frequency ?: "Todos los días (Diario)",
-                selectedDays = if (this.selectedDays.isNotEmpty()) this.selectedDays else ALL_WEEK_DAYS,
-                instructions = this.instructions,
-                isCompleted = this.isCompleted,
-                userEmail = this.userEmail ?: defaultUserEmail
+                id = syncedDose.id,
+                medicationId = syncedDose.id,
+                medicationName = syncedDose.name,
+                dosage = syncedDose.dosage,
+                scheduledTime = syncedDose.scheduledTime,
+                frequency = syncedDose.frequency ?: "Todos los días (Diario)",
+                selectedDays = if (syncedDose.selectedDays.isNotEmpty()) syncedDose.selectedDays else ALL_WEEK_DAYS,
+                instructions = syncedDose.instructions,
+                isCompleted = syncedDose.isCompleted,
+                userEmail = syncedDose.userEmail ?: defaultUserEmail,
+                completedAt = syncedDose.completedAt
             )
         }
     }
@@ -119,12 +157,13 @@ class MedicationRepository(
                 apiService.getTodayMedications()
             }
             if (response != null && response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+                val synced = response.body()!!.map { applyPersistedCompletionToDose(it) }
+                Result.success(synced)
             } else {
-                Result.success(localDoses.toList())
+                Result.success(localDoses.map { applyPersistedCompletionToDose(it) })
             }
         } catch (_: Exception) {
-            Result.success(localDoses.toList())
+            Result.success(localDoses.map { applyPersistedCompletionToDose(it) })
         }
     }
 
@@ -139,7 +178,8 @@ class MedicationRepository(
                 apiService.getReminders(normalizedEmail)
             }
             if (response != null && response.isSuccessful && response.body() != null) {
-                val filtered = filterRemindersForAuthenticatedUser(response.body()!!, normalizedEmail)
+                val synced = response.body()!!.map { applyPersistedCompletionToReminder(it) }
+                val filtered = filterRemindersForAuthenticatedUser(synced, normalizedEmail)
                 Result.success(sortRemindersChronologically(filtered))
             } else if (response != null && !response.isSuccessful) {
                 val errorMsg = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
@@ -154,6 +194,90 @@ class MedicationRepository(
             val localReminders = localDoses.map { it.toReminder(normalizedEmail) }
             val filtered = filterRemindersForAuthenticatedUser(localReminders, normalizedEmail)
             Result.success(sortRemindersChronologically(filtered))
+        }
+    }
+
+    suspend fun markReminderAsCompleted(
+        reminderId: String,
+        userEmail: String? = null,
+        completedAt: String = SimpleDateFormat("hh:mm a", Locale.US).format(Date()),
+    ): Result<CompleteReminderResponse> {
+        val trimmedId = reminderId.trim()
+        if (trimmedId.isEmpty()) {
+            return Result.failure(Exception("No se pudo identificar el recordatorio a completar"))
+        }
+
+        val request = CompleteReminderRequest(
+            reminderId = trimmedId,
+            completedAt = completedAt,
+            userEmail = userEmail?.trim()?.ifBlank { null }
+        )
+
+        return try {
+            val response = withTimeoutOrNull(2000L) {
+                apiService.markReminderAsCompleted(trimmedId, request)
+            }
+            if (response != null && response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                if (!body.success) {
+                    return Result.failure(
+                        Exception(body.message.ifBlank { "No se pudo marcar el recordatorio como realizado" })
+                    )
+                }
+                val finalCompletedAt = body.completedAt ?: completedAt
+                persistCompletedState(trimmedId, finalCompletedAt)
+                Result.success(
+                    body.copy(
+                        reminderId = body.reminderId ?: trimmedId,
+                        completedAt = finalCompletedAt
+                    )
+                )
+            } else if (response != null && !response.isSuccessful) {
+                val errorMsg = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
+                    ?: "No se pudo completar la operación en el servidor (${response.code()})"
+                Result.failure(Exception(errorMsg))
+            } else {
+                // Modo offline / simulación con persistencia en sesión
+                val updatedDose = persistCompletedState(trimmedId, completedAt)
+                val medName = updatedDose?.name ?: "medicamento"
+                Result.success(
+                    CompleteReminderResponse(
+                        success = true,
+                        message = "Toma de '$medName' marcada como realizada",
+                        reminderId = trimmedId,
+                        completedAt = completedAt,
+                        updatedReminder = updatedDose?.toReminder(userEmail)
+                    )
+                )
+            }
+        } catch (_: Exception) {
+            val updatedDose = persistCompletedState(trimmedId, completedAt)
+            val medName = updatedDose?.name ?: "medicamento"
+            Result.success(
+                CompleteReminderResponse(
+                    success = true,
+                    message = "Toma de '$medName' marcada como realizada",
+                    reminderId = trimmedId,
+                    completedAt = completedAt,
+                    updatedReminder = updatedDose?.toReminder(userEmail)
+                )
+            )
+        }
+    }
+
+    private fun persistCompletedState(reminderId: String, completedAt: String): MedicationDose? {
+        completedRemindersRegistry[reminderId] = completedAt
+        val index = localDoses.indexOfFirst { it.id == reminderId }
+        return if (index != -1) {
+            val current = localDoses[index]
+            val updated = current.copy(
+                isCompleted = true,
+                completedAt = completedAt
+            )
+            localDoses[index] = updated
+            updated
+        } else {
+            null
         }
     }
 
@@ -308,6 +432,11 @@ class MedicationRepository(
             }
             if (response != null && response.isSuccessful && response.body() != null) {
                 val updated = response.body()!!
+                if (updated.isCompleted) {
+                    completedRemindersRegistry[doseId] = updated.completedAt ?: "Realizado"
+                } else {
+                    completedRemindersRegistry.remove(doseId)
+                }
                 val index = localDoses.indexOfFirst { it.id == doseId }
                 if (index != -1) {
                     localDoses[index] = updated
@@ -315,10 +444,10 @@ class MedicationRepository(
             } else {
                 toggleLocalStatus(doseId)
             }
-            Result.success(localDoses.toList())
+            Result.success(localDoses.map { applyPersistedCompletionToDose(it) })
         } catch (_: Exception) {
             toggleLocalStatus(doseId)
-            Result.success(localDoses.toList())
+            Result.success(localDoses.map { applyPersistedCompletionToDose(it) })
         }
     }
 
@@ -326,7 +455,21 @@ class MedicationRepository(
         val index = localDoses.indexOfFirst { it.id == doseId }
         if (index != -1) {
             val current = localDoses[index]
-            localDoses[index] = current.copy(isCompleted = !current.isCompleted)
+            val newCompleted = !current.isCompleted
+            val completedAtStr = if (newCompleted) {
+                SimpleDateFormat("hh:mm a", Locale.US).format(Date())
+            } else {
+                null
+            }
+            if (newCompleted && completedAtStr != null) {
+                completedRemindersRegistry[doseId] = completedAtStr
+            } else {
+                completedRemindersRegistry.remove(doseId)
+            }
+            localDoses[index] = current.copy(
+                isCompleted = newCompleted,
+                completedAt = completedAtStr
+            )
         }
     }
 }

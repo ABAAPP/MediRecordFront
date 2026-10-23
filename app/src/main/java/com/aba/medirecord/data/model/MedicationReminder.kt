@@ -11,4 +11,5 @@ data class MedicationReminder(
     val instructions: String? = null,
     val isCompleted: Boolean = false,
     val userEmail: String? = null,
+    val completedAt: String? = null,
 )

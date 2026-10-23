@@ -18,6 +18,11 @@ enum class ReminderFilter {
     COMPLETED
 }
 
+sealed class ReminderActionFeedback {
+    data class Success(val message: String) : ReminderActionFeedback()
+    data class Error(val message: String) : ReminderActionFeedback()
+}
+
 sealed class RemindersUiState {
     object Loading : RemindersUiState()
     data class Success(
@@ -62,6 +67,12 @@ class RemindersViewModel @JvmOverloads constructor(
 
     private val _uiState = MutableStateFlow<RemindersUiState>(RemindersUiState.Loading)
     val uiState: StateFlow<RemindersUiState> = _uiState.asStateFlow()
+
+    private val _completingReminderId = MutableStateFlow<String?>(null)
+    val completingReminderId: StateFlow<String?> = _completingReminderId.asStateFlow()
+
+    private val _actionFeedback = MutableStateFlow<ReminderActionFeedback?>(null)
+    val actionFeedback: StateFlow<ReminderActionFeedback?> = _actionFeedback.asStateFlow()
 
     private var currentFilter: ReminderFilter = ReminderFilter.ALL
     private var cachedReminders: List<MedicationReminder> = emptyList()
@@ -110,7 +121,59 @@ class RemindersViewModel @JvmOverloads constructor(
         }
     }
 
+    fun markReminderAsCompleted(reminderId: String) {
+        viewModelScope.launch {
+            _completingReminderId.value = reminderId
+            _actionFeedback.value = null
+
+            repository.markReminderAsCompleted(reminderId, currentEmail)
+                .onSuccess { response ->
+                    // Actualizar lista en memoria para reflejar inmediatamente el estado "Realizado"
+                    cachedReminders = cachedReminders.map { item ->
+                        if (item.id == reminderId || item.medicationId == reminderId) {
+                            item.copy(
+                                isCompleted = true,
+                                completedAt = response.completedAt ?: item.completedAt ?: "Recién tomado"
+                            )
+                        } else {
+                            item
+                        }
+                    }
+
+                    // Volver a consultar al repositorio para asegurar sincronización persistente
+                    repository.getRemindersForUser(currentEmail)
+                        .onSuccess { refreshed ->
+                            cachedReminders = refreshed
+                        }
+
+                    _uiState.value = RemindersUiState.Success(
+                        allReminders = cachedReminders,
+                        displayedReminders = applyFilter(cachedReminders, currentFilter),
+                        selectedFilter = currentFilter,
+                        userEmail = currentEmail
+                    )
+
+                    _actionFeedback.value = ReminderActionFeedback.Success(
+                        response.message.ifBlank { "Recordatorio marcado como realizado correctamente" }
+                    )
+                    _completingReminderId.value = null
+                }
+                .onFailure { error ->
+                    _actionFeedback.value = ReminderActionFeedback.Error(
+                        error.message?.ifBlank { "No se pudo marcar el recordatorio como realizado. Intenta de nuevo." }
+                            ?: "No se pudo marcar el recordatorio como realizado. Intenta de nuevo."
+                    )
+                    _completingReminderId.value = null
+                }
+        }
+    }
+
     fun toggleReminderStatus(reminderId: String) {
+        val target = cachedReminders.find { it.id == reminderId }
+        if (target != null && !target.isCompleted) {
+            markReminderAsCompleted(reminderId)
+            return
+        }
         viewModelScope.launch {
             repository.toggleReminderStatus(reminderId, currentEmail)
                 .onSuccess { updatedReminders ->
@@ -127,5 +190,9 @@ class RemindersViewModel @JvmOverloads constructor(
                     }
                 }
         }
+    }
+
+    fun clearFeedback() {
+        _actionFeedback.value = null
     }
 }
