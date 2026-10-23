@@ -9,6 +9,7 @@ import com.aba.medirecord.data.model.MedicationResponse
 import com.aba.medirecord.data.model.ScheduleRequest
 import com.aba.medirecord.data.model.ScheduleResponse
 import com.aba.medirecord.data.network.ApiService
+import com.aba.medirecord.util.UserMessageMapper
 import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -230,9 +231,13 @@ class MedicationRepository(
                 val filtered = filterRemindersForAuthenticatedUser(synced, normalizedEmail)
                 Result.success(sortRemindersChronologically(filtered))
             } else if (response != null && !response.isSuccessful) {
-                val errorMsg = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
-                    ?: "Error al obtener los recordatorios desde el servidor (${response.code()})"
-                Result.failure(Exception(errorMsg))
+                val rawBody = response.errorBody()?.string()
+                val friendlyMsg = UserMessageMapper.mapApiError(
+                    httpCode = response.code(),
+                    rawErrorBody = rawBody,
+                    defaultFriendlyMessage = "No se pudieron obtener tus recordatorios en este momento. Intenta nuevamente."
+                )
+                Result.failure(Exception(friendlyMsg))
             } else {
                 val localReminders = localDoses.map { it.toReminder(normalizedEmail) }
                 val filtered = filterRemindersForAuthenticatedUser(localReminders, normalizedEmail)
@@ -281,9 +286,13 @@ class MedicationRepository(
                     )
                 )
             } else if (response != null && !response.isSuccessful) {
-                val errorMsg = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
-                    ?: "No se pudo completar la operación en el servidor (${response.code()})"
-                Result.failure(Exception(errorMsg))
+                val rawBody = response.errorBody()?.string()
+                val friendlyMsg = UserMessageMapper.mapApiError(
+                    httpCode = response.code(),
+                    rawErrorBody = rawBody,
+                    defaultFriendlyMessage = "No se pudo completar la operación para marcar la toma como realizada. Intenta nuevamente."
+                )
+                Result.failure(Exception(friendlyMsg))
             } else {
                 // Modo offline / simulación con persistencia en sesión
                 val updatedDose = persistCompletedState(trimmedId, completedAt)
@@ -354,9 +363,13 @@ class MedicationRepository(
                 localDoses.add(newDose)
                 Result.success(body)
             } else if (response != null && !response.isSuccessful) {
-                val errorMsg = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
-                    ?: "Error del servidor al registrar medicamento (${response.code()})"
-                Result.failure(Exception(errorMsg))
+                val rawBody = response.errorBody()?.string()
+                val friendlyMsg = UserMessageMapper.mapApiError(
+                    httpCode = response.code(),
+                    rawErrorBody = rawBody,
+                    defaultFriendlyMessage = "No se pudo registrar el medicamento en este momento. Por favor intenta nuevamente."
+                )
+                Result.failure(Exception(friendlyMsg))
             } else {
                 // Modo offline / simulación
                 val newDose = MedicationDose(
@@ -412,9 +425,13 @@ class MedicationRepository(
                 updateLocalSchedule(request, body.updatedMedication)
                 Result.success(body)
             } else if (response != null && !response.isSuccessful) {
-                val errorMsg = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
-                    ?: "Error del servidor al guardar el horario (${response.code()})"
-                Result.failure(Exception(errorMsg))
+                val rawBody = response.errorBody()?.string()
+                val friendlyMsg = UserMessageMapper.mapApiError(
+                    httpCode = response.code(),
+                    rawErrorBody = rawBody,
+                    defaultFriendlyMessage = "No se pudo guardar la configuración del horario. Por favor intenta nuevamente."
+                )
+                Result.failure(Exception(friendlyMsg))
             } else {
                 // Modo offline / simulación sincronizada
                 val updated = updateLocalSchedule(request, null)
