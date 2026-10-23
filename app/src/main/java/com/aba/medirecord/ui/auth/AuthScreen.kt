@@ -45,6 +45,7 @@ fun AuthScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val selectedTab by viewModel.selectedTab.collectAsState()
+    val formErrors by viewModel.formErrors.collectAsState()
 
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -126,9 +127,9 @@ fun AuthScreen(
                     )
 
                     Text(
-                        text = if (selectedTab == AuthTab.LOGIN) 
-                            "Accede a tus registros e historial de salud" 
-                        else 
+                        text = if (selectedTab == AuthTab.LOGIN)
+                            "Accede a tus registros e historial de salud"
+                        else
                             "Regístrate para gestionar tus medicamentos y recordatorios",
                         style = MaterialTheme.typography.bodyMedium.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -146,8 +147,11 @@ fun AuthScreen(
                         Column {
                             OutlinedTextField(
                                 value = name,
-                                onValueChange = { name = it },
-                                label = { Text("Nombre Completo") },
+                                onValueChange = {
+                                    name = it
+                                    viewModel.clearErrors()
+                                },
+                                label = { Text("Nombre Completo *") },
                                 leadingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.Person,
@@ -155,26 +159,37 @@ fun AuthScreen(
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 },
+                                isError = formErrors.nameError != null,
+                                supportingText = formErrors.nameError?.let {
+                                    { Text(it, color = MaterialTheme.colorScheme.error) }
+                                },
                                 singleLine = true,
                                 shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier.fillMaxWidth(),
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                             )
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
                         }
                     }
 
                     // Campo Correo Electrónico
                     OutlinedTextField(
                         value = email,
-                        onValueChange = { email = it },
-                        label = { Text("Correo Electrónico") },
+                        onValueChange = {
+                            email = it
+                            viewModel.clearErrors()
+                        },
+                        label = { Text("Correo Electrónico *") },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Email,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary
                             )
+                        },
+                        isError = formErrors.emailError != null,
+                        supportingText = formErrors.emailError?.let {
+                            { Text(it, color = MaterialTheme.colorScheme.error) }
                         },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
@@ -185,13 +200,16 @@ fun AuthScreen(
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Campo Contraseña
                     OutlinedTextField(
                         value = password,
-                        onValueChange = { password = it },
-                        label = { Text("Contraseña") },
+                        onValueChange = {
+                            password = it
+                            viewModel.clearErrors()
+                        },
+                        label = { Text("Contraseña *") },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Lock,
@@ -207,6 +225,10 @@ fun AuthScreen(
                                 )
                             }
                         },
+                        isError = formErrors.passwordError != null,
+                        supportingText = formErrors.passwordError?.let {
+                            { Text(it, color = MaterialTheme.colorScheme.error) }
+                        },
                         singleLine = true,
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         shape = RoundedCornerShape(16.dp),
@@ -217,9 +239,9 @@ fun AuthScreen(
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                    // Mensaje de Error si existe
+                    // Mensaje de Error claro y comprensible si existe
                     if (uiState is AuthState.Error) {
                         Surface(
                             color = MaterialTheme.colorScheme.errorContainer,
