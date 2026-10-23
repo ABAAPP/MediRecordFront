@@ -38,6 +38,7 @@ fun RegisterScreen(
     var passwordVisible by remember { mutableStateOf(false) }
 
     val uiState by viewModel.uiState.collectAsState()
+    val formErrors by viewModel.formErrors.collectAsState()
 
     LaunchedEffect(uiState) {
         if (uiState is RegisterState.Success) {
@@ -92,8 +93,11 @@ fun RegisterScreen(
 
                     OutlinedTextField(
                         value = name,
-                        onValueChange = { name = it },
-                        label = { Text("Nombre Completo") },
+                        onValueChange = {
+                            name = it
+                            viewModel.clearErrors()
+                        },
+                        label = { Text("Nombre Completo *") },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Person,
@@ -101,24 +105,35 @@ fun RegisterScreen(
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         },
+                        isError = formErrors.nameError != null,
+                        supportingText = formErrors.nameError?.let {
+                            { Text(it, color = MaterialTheme.colorScheme.error) }
+                        },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     OutlinedTextField(
                         value = email,
-                        onValueChange = { email = it },
-                        label = { Text("Correo Electrónico") },
+                        onValueChange = {
+                            email = it
+                            viewModel.clearErrors()
+                        },
+                        label = { Text("Correo Electrónico *") },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Email,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary
                             )
+                        },
+                        isError = formErrors.emailError != null,
+                        supportingText = formErrors.emailError?.let {
+                            { Text(it, color = MaterialTheme.colorScheme.error) }
                         },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
@@ -129,12 +144,15 @@ fun RegisterScreen(
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     OutlinedTextField(
                         value = password,
-                        onValueChange = { password = it },
-                        label = { Text("Contraseña (mínimo 6 caracteres)") },
+                        onValueChange = {
+                            password = it
+                            viewModel.clearErrors()
+                        },
+                        label = { Text("Contraseña (mínimo 6 caracteres) *") },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Lock,
@@ -150,6 +168,10 @@ fun RegisterScreen(
                                 )
                             }
                         },
+                        isError = formErrors.passwordError != null,
+                        supportingText = formErrors.passwordError?.let {
+                            { Text(it, color = MaterialTheme.colorScheme.error) }
+                        },
                         singleLine = true,
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         shape = RoundedCornerShape(16.dp),
@@ -160,7 +182,7 @@ fun RegisterScreen(
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     if (uiState is RegisterState.Error) {
                         Surface(
