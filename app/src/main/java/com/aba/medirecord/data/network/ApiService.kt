@@ -3,6 +3,7 @@ package com.aba.medirecord.data.network
 import com.aba.medirecord.data.model.LoginRequest
 import com.aba.medirecord.data.model.LoginResponse
 import com.aba.medirecord.data.model.MedicationDose
+import com.aba.medirecord.data.model.MedicationReminder
 import com.aba.medirecord.data.model.MedicationRequest
 import com.aba.medirecord.data.model.MedicationResponse
 import com.aba.medirecord.data.model.RegisterRequest
@@ -14,6 +15,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface ApiService {
     @POST("api/auth/register")
@@ -33,4 +35,7 @@ interface ApiService {
 
     @POST("api/schedules")
     suspend fun saveMedicationSchedule(@Body request: ScheduleRequest): Response<ScheduleResponse>
+
+    @GET("api/reminders")
+    suspend fun getReminders(@Query("userEmail") userEmail: String? = null): Response<List<MedicationReminder>>
 }
