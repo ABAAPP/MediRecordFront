@@ -3,6 +3,7 @@ package com.aba.medirecord
 import com.aba.medirecord.data.model.LoginRequest
 import com.aba.medirecord.data.model.LoginResponse
 import com.aba.medirecord.data.model.MedicationDose
+import com.aba.medirecord.data.model.MedicationReminder
 import com.aba.medirecord.data.model.MedicationRequest
 import com.aba.medirecord.data.model.MedicationResponse
 import com.aba.medirecord.data.model.RegisterRequest
@@ -21,6 +22,7 @@ import java.util.Locale
 
 class FakeApiService : ApiService {
     var shouldFail: Boolean = false
+    var simulatedReminders: List<MedicationReminder> = emptyList()
 
     override suspend fun register(request: RegisterRequest): Response<RegisterResponse> {
         return Response.success(RegisterResponse(true, "OK"))
@@ -79,6 +81,14 @@ class FakeApiService : ApiService {
                     )
                 )
             )
+        }
+    }
+
+    override suspend fun getReminders(userEmail: String?): Response<List<MedicationReminder>> {
+        return if (shouldFail) {
+            Response.error(500, okhttp3.ResponseBody.create(null, "Error al obtener recordatorios"))
+        } else {
+            Response.success(simulatedReminders)
         }
     }
 }

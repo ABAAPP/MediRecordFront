@@ -42,6 +42,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     onNavigateToAddMedication: () -> Unit = {},
     onNavigateToConfigureSchedule: (String?) -> Unit = {},
+    onNavigateToReminders: () -> Unit = {},
     viewModel: HomeViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -74,10 +75,10 @@ fun HomeScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { onNavigateToConfigureSchedule(null) }) {
+                    IconButton(onClick = onNavigateToReminders) {
                         Icon(
                             imageVector = Icons.Default.Notifications,
-                            contentDescription = "Configurar horarios",
+                            contentDescription = "Mis recordatorios",
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -133,7 +134,8 @@ fun HomeScreen(
             UserGreetingCard(
                 userEmail = userEmail,
                 currentDateStr = currentDateStr,
-                onConfigureSchedulesClick = { onNavigateToConfigureSchedule(null) }
+                onConfigureSchedulesClick = { onNavigateToConfigureSchedule(null) },
+                onViewRemindersClick = onNavigateToReminders
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -181,6 +183,7 @@ private fun UserGreetingCard(
     userEmail: String?,
     currentDateStr: String,
     onConfigureSchedulesClick: () -> Unit = {},
+    onViewRemindersClick: () -> Unit = {},
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -192,47 +195,22 @@ private fun UserGreetingCard(
         Column(
             modifier = Modifier.padding(20.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "¡Hola!",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    if (!userEmail.isNullOrEmpty()) {
-                        Text(
-                            text = userEmail,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
-                        )
-                    }
-                }
-
-                FilledTonalButton(
-                    onClick = onConfigureSchedulesClick,
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Configurar Horarios",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+            Text(
+                text = "¡Hola!",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            if (!userEmail.isNullOrEmpty()) {
+                Text(
+                    text = userEmail,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -249,6 +227,51 @@ private fun UserGreetingCard(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary
                 )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onViewRemindersClick,
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Mis Recordatorios",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                FilledTonalButton(
+                    onClick = onConfigureSchedulesClick,
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Configurar Horario",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }

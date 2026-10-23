@@ -9,4 +9,5 @@ data class MedicationDose(
     val instructions: String? = null,
     val frequency: String? = null,
     val selectedDays: List<String> = emptyList(),
+    val userEmail: String? = null,
 )
