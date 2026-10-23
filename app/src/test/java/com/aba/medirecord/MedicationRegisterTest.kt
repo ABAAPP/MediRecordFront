@@ -7,6 +7,8 @@ import com.aba.medirecord.data.model.MedicationRequest
 import com.aba.medirecord.data.model.MedicationResponse
 import com.aba.medirecord.data.model.RegisterRequest
 import com.aba.medirecord.data.model.RegisterResponse
+import com.aba.medirecord.data.model.ScheduleRequest
+import com.aba.medirecord.data.model.ScheduleResponse
 import com.aba.medirecord.data.network.ApiService
 import com.aba.medirecord.data.repository.MedicationRepository
 import kotlinx.coroutines.runBlocking
@@ -51,6 +53,29 @@ class FakeApiService : ApiService {
                         dosage = request.dosage,
                         scheduledTime = request.scheduledTime,
                         instructions = request.instructions
+                    )
+                )
+            )
+        }
+    }
+
+    override suspend fun saveMedicationSchedule(request: ScheduleRequest): Response<ScheduleResponse> {
+        return if (shouldFail) {
+            Response.error(500, okhttp3.ResponseBody.create(null, "Error al guardar el horario en el servidor"))
+        } else {
+            Response.success(
+                ScheduleResponse(
+                    success = true,
+                    message = "Horario guardado para '${request.medicationName}'",
+                    scheduleId = "sched-123",
+                    updatedMedication = MedicationDose(
+                        id = request.medicationId,
+                        name = request.medicationName,
+                        dosage = "500 mg",
+                        scheduledTime = request.scheduledTime,
+                        instructions = request.notes,
+                        frequency = request.frequency,
+                        selectedDays = request.selectedDays
                     )
                 )
             )
