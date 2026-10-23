@@ -7,6 +7,8 @@ import com.aba.medirecord.data.model.MedicationRequest
 import com.aba.medirecord.data.model.MedicationResponse
 import com.aba.medirecord.data.model.RegisterRequest
 import com.aba.medirecord.data.model.RegisterResponse
+import com.aba.medirecord.data.model.ScheduleRequest
+import com.aba.medirecord.data.model.ScheduleResponse
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -28,4 +30,7 @@ interface ApiService {
 
     @POST("api/medications")
     suspend fun registerMedication(@Body request: MedicationRequest): Response<MedicationResponse>
+
+    @POST("api/schedules")
+    suspend fun saveMedicationSchedule(@Body request: ScheduleRequest): Response<ScheduleResponse>
 }
