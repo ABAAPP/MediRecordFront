@@ -15,15 +15,30 @@ data class AuthFormValidationErrors(
 object ValidationUtils {
 
     private val EMAIL_REGEX = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
-    private val TIME_REGEX = Regex("^\\d{1,2}:\\d{2}(\\s?(AM|PM|am|pm))?$")
+    private val TIME_REGEX = Regex("^(\\d{1,2}):(\\d{2})(?:\\s?(AM|PM|am|pm))?$")
     private val DATE_REGEX = Regex("^\\d{2}/\\d{2}/\\d{4}$")
 
     fun isValidEmail(email: String): Boolean {
         return EMAIL_REGEX.matches(email.trim())
     }
 
+    /**
+     * Valida tanto la estructura como los rangos reales de hora (1..12 con AM/PM o 0..23 en 24h)
+     * y minutos (0..59). (Corrección de defecto DEF-01).
+     */
     fun isValidTimeFormat(time: String): Boolean {
-        return TIME_REGEX.matches(time.trim())
+        val match = TIME_REGEX.matchEntire(time.trim()) ?: return false
+        val hour = match.groupValues[1].toIntOrNull() ?: return false
+        val minute = match.groupValues[2].toIntOrNull() ?: return false
+        val amPm = match.groupValues[3]
+
+        if (minute !in 0..59) return false
+
+        return if (amPm.isNotEmpty()) {
+            hour in 1..12
+        } else {
+            hour in 0..23
+        }
     }
 
     fun isValidDateFormat(date: String): Boolean {

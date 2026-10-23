@@ -109,9 +109,10 @@ class AuthRepository(
     }
 
     fun saveSession(token: String, email: String) {
+        val normalizedEmail = email.trim().lowercase()
         inMemoryToken = token.trim()
-        inMemoryEmail = email.trim()
-        tokenManager?.saveToken(token, email)
+        inMemoryEmail = normalizedEmail
+        tokenManager?.saveToken(token.trim(), normalizedEmail)
     }
 
     fun getToken(): String? {
