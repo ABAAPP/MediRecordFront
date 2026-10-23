@@ -27,7 +27,10 @@ interface ApiService {
     suspend fun login(@Body request: LoginRequest): Response<LoginResponse>
 
     @GET("api/medications/today")
-    suspend fun getTodayMedications(): Response<List<MedicationDose>>
+    suspend fun getTodayMedications(
+        @Query("date") date: String? = null,
+        @Query("userEmail") userEmail: String? = null,
+    ): Response<List<MedicationDose>>
 
     @POST("api/medications/{id}/toggle")
     suspend fun toggleDoseStatus(@Path("id") doseId: String): Response<MedicationDose>

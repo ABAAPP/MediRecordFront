@@ -11,4 +11,5 @@ data class MedicationDose(
     val selectedDays: List<String> = emptyList(),
     val userEmail: String? = null,
     val completedAt: String? = null,
+    val scheduledDate: String? = null,
 )
