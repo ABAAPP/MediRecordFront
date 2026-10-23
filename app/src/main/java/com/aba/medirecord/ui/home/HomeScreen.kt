@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aba.medirecord.data.model.MedicationDose
+import com.aba.medirecord.data.repository.MedicationRepository
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -52,9 +53,14 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val actionMessage by viewModel.actionMessage.collectAsState()
 
-    LaunchedEffect(Unit) {
-        viewModel.loadTodayMedications()
+    val currentIsoDate = remember {
+        MedicationRepository.getCurrentDateIso()
     }
+
+    LaunchedEffect(userEmail, currentIsoDate) {
+        viewModel.loadTodayMedications(date = currentIsoDate, userEmail = userEmail)
+    }
+
     val currentDateStr = remember {
         SimpleDateFormat("EEEE, d 'de' MMMM", Locale("es", "ES")).format(Date())
             .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
@@ -87,10 +93,14 @@ fun HomeScreen(
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
-                    IconButton(onClick = { viewModel.loadTodayMedications() }) {
+                    IconButton(
+                        onClick = {
+                            viewModel.loadTodayMedications(date = currentIsoDate, userEmail = userEmail)
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "Recargar datos",
+                            contentDescription = "Recargar medicamentos del día",
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -135,10 +145,10 @@ fun HomeScreen(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Card de Saludo e Identificación de Usuario Authenticated
+            // Card de Saludo, Fecha Actual y Usuario Autenticado (Criterios 2 y 3)
             UserGreetingCard(
                 userEmail = userEmail,
-                currentDateStr = currentDateStr,
+                currentDateStr = "$currentDateStr ($currentIsoDate)",
                 onConfigureSchedulesClick = { onNavigateToConfigureSchedule(null) },
                 onViewRemindersClick = onNavigateToReminders
             )
@@ -219,8 +229,12 @@ fun HomeScreen(
                 }
 
                 is HomeUiState.Empty -> {
+                    // Criterio 7: Se contempla el caso en que no existan medicamentos para el día
                     EmptyMedicationsView(
-                        onReload = { viewModel.loadTodayMedications() },
+                        queriedDate = state.queriedDate,
+                        onReload = {
+                            viewModel.loadTodayMedications(date = currentIsoDate, userEmail = userEmail)
+                        },
                         onRegisterClick = onNavigateToAddMedication
                     )
                 }
@@ -228,13 +242,18 @@ fun HomeScreen(
                 is HomeUiState.Error -> {
                     ErrorMedicationsView(
                         message = state.message,
-                        onRetry = { viewModel.loadTodayMedications() }
+                        onRetry = {
+                            viewModel.loadTodayMedications(date = currentIsoDate, userEmail = userEmail)
+                        }
                     )
                 }
 
                 is HomeUiState.Success -> {
                     MedicationsListContent(
-                        doses = state.doses,
+                        allDoses = state.doses,
+                        displayedDoses = state.displayedDoses,
+                        selectedFilter = state.selectedFilter,
+                        onFilterSelected = { filter -> viewModel.setFilter(filter) },
                         onMarkAsCompleted = { doseId -> viewModel.markDoseAsCompleted(doseId) },
                         onToggleDose = { doseId -> viewModel.toggleDoseStatus(doseId) },
                         onConfigureDoseSchedule = { doseId -> onNavigateToConfigureSchedule(doseId) }
@@ -346,21 +365,25 @@ private fun UserGreetingCard(
 
 @Composable
 private fun MedicationsListContent(
-    doses: List<MedicationDose>,
+    allDoses: List<MedicationDose>,
+    displayedDoses: List<MedicationDose>,
+    selectedFilter: TodayDoseFilter,
+    onFilterSelected: (TodayDoseFilter) -> Unit,
     onMarkAsCompleted: (String) -> Unit,
     onToggleDose: (String) -> Unit,
     onConfigureDoseSchedule: (String) -> Unit = {},
 ) {
-    val completedCount = doses.count { it.isCompleted }
-    val totalCount = doses.size
+    val completedCount = allDoses.count { it.isCompleted }
+    val pendingCount = allDoses.count { !it.isCompleted }
+    val totalCount = allDoses.size
     val progress = if (totalCount > 0) completedCount.toFloat() / totalCount else 0f
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Barra de Resumen de Progreso del Día
+        // Barra de Resumen de Progreso del Día (Criterio 5)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp),
+                .padding(bottom = 12.dp),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -373,7 +396,7 @@ private fun MedicationsListContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Tomas de Hoy",
+                        text = "Medicamentos del Día",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -397,13 +420,37 @@ private fun MedicationsListContent(
             }
         }
 
-        // Lista Organizada de Medicamentos y Tomas
+        // Chips de filtro para verificar tomas programadas vs realizadas (Criterio 5)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = selectedFilter == TodayDoseFilter.ALL,
+                onClick = { onFilterSelected(TodayDoseFilter.ALL) },
+                label = { Text("Todas ($totalCount)") }
+            )
+            FilterChip(
+                selected = selectedFilter == TodayDoseFilter.PENDING,
+                onClick = { onFilterSelected(TodayDoseFilter.PENDING) },
+                label = { Text("Pendientes ($pendingCount)") }
+            )
+            FilterChip(
+                selected = selectedFilter == TodayDoseFilter.COMPLETED,
+                onClick = { onFilterSelected(TodayDoseFilter.COMPLETED) },
+                label = { Text("Realizadas ($completedCount)") }
+            )
+        }
+
+        // Lista Ordenada Cronológicamente de Medicamentos y sus Horarios (Criterios 4 y 6)
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 80.dp)
         ) {
             items(
-                items = doses,
+                items = displayedDoses,
                 key = { it.id }
             ) { dose ->
                 MedicationDoseCard(
@@ -470,7 +517,7 @@ private fun MedicationDoseCard(
 
                 Spacer(modifier = Modifier.width(14.dp))
 
-                // Información del Medicamento y Dosis
+                // Información del Medicamento Asociado a su Horario (Criterio 4)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = dose.name,
@@ -528,7 +575,7 @@ private fun MedicationDoseCard(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Badge de Estado: "Realizado" vs "Pendiente"
+                    // Identificación del estado de cada toma: "Realizado" vs "Pendiente" (Criterio 5)
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = if (dose.isCompleted) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
@@ -554,7 +601,6 @@ private fun MedicationDoseCard(
                         }
                     }
 
-                    // Botón rápido para configurar horario de este medicamento
                     TextButton(
                         onClick = onConfigureSchedule,
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
@@ -575,7 +621,6 @@ private fun MedicationDoseCard(
                 }
             }
 
-            // Opción explícita "Marcar como realizado" en cada recordatorio pendiente
             if (!dose.isCompleted) {
                 Spacer(modifier = Modifier.height(10.dp))
                 FilledTonalButton(
@@ -604,6 +649,7 @@ private fun MedicationDoseCard(
 
 @Composable
 private fun EmptyMedicationsView(
+    queriedDate: String,
     onReload: () -> Unit,
     onRegisterClick: () -> Unit = {},
 ) {
@@ -644,7 +690,7 @@ private fun EmptyMedicationsView(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Sin medicamentos programados",
+                    text = "Sin medicamentos para hoy",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -653,7 +699,7 @@ private fun EmptyMedicationsView(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "No tienes tomas pendientes ni medicamentos asignados para el día de hoy.",
+                    text = "No tienes tomas programadas ni medicamentos asignados para la fecha actual ($queriedDate).",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 14.sp
