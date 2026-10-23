@@ -25,6 +25,9 @@ import java.util.Locale
 class FakeApiService : ApiService {
     var shouldFail: Boolean = false
     var simulatedReminders: List<MedicationReminder> = emptyList()
+    var simulatedTodayDoses: List<MedicationDose> = emptyList()
+    var lastQueriedDate: String? = null
+    var lastQueriedUserEmail: String? = null
 
     override suspend fun register(request: RegisterRequest): Response<RegisterResponse> {
         return Response.success(RegisterResponse(true, "OK"))
@@ -34,8 +37,17 @@ class FakeApiService : ApiService {
         return Response.success(LoginResponse(true, "token", "OK"))
     }
 
-    override suspend fun getTodayMedications(): Response<List<MedicationDose>> {
-        return Response.success(emptyList())
+    override suspend fun getTodayMedications(
+        date: String?,
+        userEmail: String?,
+    ): Response<List<MedicationDose>> {
+        lastQueriedDate = date
+        lastQueriedUserEmail = userEmail
+        return if (shouldFail) {
+            Response.error(500, okhttp3.ResponseBody.create(null, "Error al consultar medicamentos del día"))
+        } else {
+            Response.success(simulatedTodayDoses)
+        }
     }
 
     override suspend fun toggleDoseStatus(doseId: String): Response<MedicationDose> {
