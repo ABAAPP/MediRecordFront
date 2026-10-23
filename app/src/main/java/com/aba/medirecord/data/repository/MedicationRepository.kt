@@ -67,9 +67,13 @@ class MedicationRepository(
                 isCompleted = false,
                 instructions = "Después de cenar",
                 frequency = "Días específicos de la semana",
-                selectedDays = listOf("Lunes", "Miércoles", "Viernes")
+                selectedDays = ALL_WEEK_DAYS
             ),
         )
+
+        fun getCurrentDateIso(date: Date = Date()): String {
+            return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(date)
+        }
 
         fun parseTimeToMinutes(timeStr: String): Int {
             val cleaned = timeStr.trim().uppercase()
@@ -87,11 +91,44 @@ class MedicationRepository(
             return hour * 60 + minute
         }
 
+        fun sortDosesChronologically(doses: List<MedicationDose>): List<MedicationDose> {
+            return doses.sortedWith(
+                compareBy<MedicationDose> { parseTimeToMinutes(it.scheduledTime) }
+                    .thenBy { it.name.lowercase() }
+            )
+        }
+
         fun sortRemindersChronologically(reminders: List<MedicationReminder>): List<MedicationReminder> {
             return reminders.sortedWith(
                 compareBy<MedicationReminder> { parseTimeToMinutes(it.scheduledTime) }
                     .thenBy { it.medicationName.lowercase() }
             )
+        }
+
+        fun filterDosesForUserAndDate(
+            doses: List<MedicationDose>,
+            userEmail: String?,
+            date: String?,
+        ): List<MedicationDose> {
+            val normalizedEmail = userEmail?.trim().orEmpty()
+            val normalizedDate = date?.trim().orEmpty()
+
+            return doses.filter { dose ->
+                val matchesUser = if (normalizedEmail.isEmpty()) {
+                    true
+                } else {
+                    dose.userEmail.isNullOrBlank() ||
+                            dose.userEmail.trim().equals(normalizedEmail, ignoreCase = true)
+                }
+
+                val matchesDate = if (normalizedDate.isEmpty() || dose.scheduledDate.isNullOrBlank()) {
+                    true
+                } else {
+                    dose.scheduledDate.trim() == normalizedDate
+                }
+
+                matchesUser && matchesDate
+            }
         }
 
         fun filterRemindersForAuthenticatedUser(
@@ -151,19 +188,30 @@ class MedicationRepository(
         }
     }
 
-    suspend fun getTodayMedications(): Result<List<MedicationDose>> {
+    suspend fun getTodayMedications(
+        date: String = getCurrentDateIso(),
+        userEmail: String? = null,
+    ): Result<List<MedicationDose>> {
+        val queryDate = date.trim().ifEmpty { getCurrentDateIso() }
+        val normalizedEmail = userEmail?.trim()?.ifBlank { null }
+
         return try {
             val response = withTimeoutOrNull(1500L) {
-                apiService.getTodayMedications()
+                apiService.getTodayMedications(date = queryDate, userEmail = normalizedEmail)
             }
             if (response != null && response.isSuccessful && response.body() != null) {
                 val synced = response.body()!!.map { applyPersistedCompletionToDose(it) }
-                Result.success(synced)
+                val filtered = filterDosesForUserAndDate(synced, normalizedEmail, queryDate)
+                Result.success(sortDosesChronologically(filtered))
             } else {
-                Result.success(localDoses.map { applyPersistedCompletionToDose(it) })
+                val synced = localDoses.map { applyPersistedCompletionToDose(it) }
+                val filtered = filterDosesForUserAndDate(synced, normalizedEmail, queryDate)
+                Result.success(sortDosesChronologically(filtered))
             }
         } catch (_: Exception) {
-            Result.success(localDoses.map { applyPersistedCompletionToDose(it) })
+            val synced = localDoses.map { applyPersistedCompletionToDose(it) }
+            val filtered = filterDosesForUserAndDate(synced, normalizedEmail, queryDate)
+            Result.success(sortDosesChronologically(filtered))
         }
     }
 
@@ -444,10 +492,12 @@ class MedicationRepository(
             } else {
                 toggleLocalStatus(doseId)
             }
-            Result.success(localDoses.map { applyPersistedCompletionToDose(it) })
+            val synced = localDoses.map { applyPersistedCompletionToDose(it) }
+            Result.success(sortDosesChronologically(synced))
         } catch (_: Exception) {
             toggleLocalStatus(doseId)
-            Result.success(localDoses.map { applyPersistedCompletionToDose(it) })
+            val synced = localDoses.map { applyPersistedCompletionToDose(it) }
+            Result.success(sortDosesChronologically(synced))
         }
     }
 
