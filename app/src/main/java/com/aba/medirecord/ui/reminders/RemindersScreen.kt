@@ -1,9 +1,9 @@
 package com.aba.medirecord.ui.reminders
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,13 +12,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,6 +45,8 @@ fun RemindersScreen(
     viewModel: RemindersViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val completingReminderId by viewModel.completingReminderId.collectAsState()
+    val actionFeedback by viewModel.actionFeedback.collectAsState()
 
     LaunchedEffect(userEmail) {
         viewModel.loadReminders(userEmail)
@@ -113,6 +118,67 @@ fun RemindersScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 20.dp)
         ) {
+            // Mensaje de confirmación o error al marcar como realizado (Criterios 4 y 7)
+            AnimatedVisibility(visible = actionFeedback != null) {
+                val feedback = actionFeedback
+                if (feedback != null) {
+                    val isError = feedback is ReminderActionFeedback.Error
+                    val message = when (feedback) {
+                        is ReminderActionFeedback.Success -> feedback.message
+                        is ReminderActionFeedback.Error -> feedback.message
+                    }
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp, bottom = 4.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isError)
+                                MaterialTheme.colorScheme.errorContainer
+                            else
+                                Color(0xFFE8F5E9)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (isError) Icons.Default.Warning else Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = if (isError) MaterialTheme.colorScheme.error else Color(0xFF2E7D32),
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isError)
+                                    MaterialTheme.colorScheme.onErrorContainer
+                                else
+                                    Color(0xFF1B5E20),
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = { viewModel.clearFeedback() },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Cerrar aviso",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = if (isError)
+                                        MaterialTheme.colorScheme.onErrorContainer
+                                    else
+                                        Color(0xFF1B5E20)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             when (val state = uiState) {
                 is RemindersUiState.Loading -> {
                     Box(
@@ -144,8 +210,9 @@ fun RemindersScreen(
                         displayedReminders = state.displayedReminders,
                         selectedFilter = state.selectedFilter,
                         userEmail = state.userEmail,
+                        completingReminderId = completingReminderId,
                         onFilterSelected = { filter -> viewModel.setFilter(filter) },
-                        onToggleReminder = { id -> viewModel.toggleReminderStatus(id) },
+                        onMarkAsCompleted = { id -> viewModel.markReminderAsCompleted(id) },
                         onEditSchedule = { medId -> onNavigateToConfigureSchedule(medId) }
                     )
                 }
@@ -160,8 +227,9 @@ private fun RemindersSuccessContent(
     displayedReminders: List<MedicationReminder>,
     selectedFilter: ReminderFilter,
     userEmail: String,
+    completingReminderId: String?,
     onFilterSelected: (ReminderFilter) -> Unit,
-    onToggleReminder: (String) -> Unit,
+    onMarkAsCompleted: (String) -> Unit,
     onEditSchedule: (String) -> Unit,
 ) {
     val pendingCount = allReminders.count { !it.isCompleted }
@@ -170,7 +238,7 @@ private fun RemindersSuccessContent(
     Column(modifier = Modifier.fillMaxSize()) {
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Banner de usuario autenticado (Criterio 7)
+        // Banner de usuario autenticado (Criterio 7 de F-07)
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
@@ -198,7 +266,7 @@ private fun RemindersSuccessContent(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Tarjetas de resumen visual: Pendientes vs Realizadas (Criterio 6)
+        // Tarjetas de resumen visual: Pendientes vs Realizados
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -211,7 +279,7 @@ private fun RemindersSuccessContent(
                 modifier = Modifier.weight(1f)
             )
             StatusSummaryCard(
-                title = "Realizadas",
+                title = "Realizados",
                 count = completedCount,
                 accentColor = Color(0xFF2E7D32),
                 bgColor = Color(0xFFE8F5E9),
@@ -221,7 +289,7 @@ private fun RemindersSuccessContent(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Chips de filtro para visualizar Todas, Pendientes o Realizadas
+        // Chips de filtro para visualizar Todos, Pendientes o Realizados
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -239,7 +307,7 @@ private fun RemindersSuccessContent(
             FilterChip(
                 selected = selectedFilter == ReminderFilter.COMPLETED,
                 onClick = { onFilterSelected(ReminderFilter.COMPLETED) },
-                label = { Text("Realizadas ($completedCount)") }
+                label = { Text("Realizados ($completedCount)") }
             )
         }
 
@@ -259,7 +327,7 @@ private fun RemindersSuccessContent(
                 )
             }
         } else {
-            // Lista ordenada cronológicamente (Criterio 5)
+            // Lista ordenada cronológicamente
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(bottom = 84.dp)
@@ -270,7 +338,8 @@ private fun RemindersSuccessContent(
                 ) { reminder ->
                     ReminderItemCard(
                         reminder = reminder,
-                        onToggleStatus = { onToggleReminder(reminder.id) },
+                        isCompleting = completingReminderId == reminder.id,
+                        onMarkAsCompleted = { onMarkAsCompleted(reminder.id) },
                         onEditSchedule = { onEditSchedule(reminder.medicationId) }
                     )
                 }
@@ -323,7 +392,8 @@ private fun StatusSummaryCard(
 @Composable
 private fun ReminderItemCard(
     reminder: MedicationReminder,
-    onToggleStatus: () -> Unit,
+    isCompleting: Boolean,
+    onMarkAsCompleted: () -> Unit,
     onEditSchedule: () -> Unit,
 ) {
     val isCompleted = reminder.isCompleted
@@ -349,8 +419,7 @@ private fun ReminderItemCard(
                 width = 1.dp,
                 color = borderColor,
                 shape = RoundedCornerShape(18.dp)
-            )
-            .clickable { onToggleStatus() },
+            ),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = cardBgColor),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isCompleted) 0.dp else 3.dp)
@@ -360,13 +429,12 @@ private fun ReminderItemCard(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // Fila superior: Horario destacado + Estado visual (Pendiente vs Realizada)
+            // Fila superior: Horario destacado + Estado visual ("Pendiente" vs "Realizado")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Horario correspondiente (Criterio 3)
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = if (isCompleted)
@@ -394,11 +462,10 @@ private fun ReminderItemCard(
                     }
                 }
 
-                // Distinción visual entre Pendiente y Realizada (Criterio 6)
+                // Badge de estado visual: cambia a "Realizado" cuando se completa (Criterio 5)
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = if (isCompleted) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
-                    modifier = Modifier.clickable { onToggleStatus() }
+                    color = if (isCompleted) Color(0xFFE8F5E9) else Color(0xFFFFF3E0)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
@@ -412,7 +479,7 @@ private fun ReminderItemCard(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (isCompleted) "Realizada" else "Pendiente",
+                            text = if (isCompleted) "Realizado" else "Pendiente",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isCompleted) Color(0xFF2E7D32) else Color(0xFFE65100)
@@ -423,7 +490,7 @@ private fun ReminderItemCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Nombre del medicamento (Criterio 2)
+            // Nombre del medicamento
             Text(
                 text = reminder.medicationName,
                 style = MaterialTheme.typography.titleMedium.copy(
@@ -438,7 +505,7 @@ private fun ReminderItemCard(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Información necesaria para identificar la toma (Criterio 4: Dosis, Instrucciones, Frecuencia y Días)
+            // Información necesaria para identificar la toma
             Text(
                 text = "💊 Dosis: ${reminder.dosage}",
                 style = MaterialTheme.typography.bodyMedium,
@@ -501,6 +568,80 @@ private fun ReminderItemCard(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Acción "Marcar como realizado" en cada recordatorio pendiente (Criterios 1, 2 y 5)
+            if (!isCompleted) {
+                Button(
+                    onClick = onMarkAsCompleted,
+                    enabled = !isCompleting,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    if (isCompleting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Confirmando toma...",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Marcar como realizado",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            } else {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFFE8F5E9).copy(alpha = 0.85f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF2E7D32),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        val completedText = if (!reminder.completedAt.isNullOrBlank()) {
+                            "Toma completada (${reminder.completedAt})"
+                        } else {
+                            "Toma completada y registrada"
+                        }
+                        Text(
+                            text = completedText,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF2E7D32)
+                        )
+                    }
                 }
             }
         }

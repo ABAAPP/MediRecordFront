@@ -1,5 +1,6 @@
 package com.aba.medirecord.ui.home
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -11,13 +12,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,6 +50,7 @@ fun HomeScreen(
     viewModel: HomeViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val actionMessage by viewModel.actionMessage.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.loadTodayMedications()
@@ -138,6 +143,67 @@ fun HomeScreen(
                 onViewRemindersClick = onNavigateToReminders
             )
 
+            // Mensaje de confirmación o error al marcar como realizado
+            AnimatedVisibility(visible = actionMessage != null) {
+                val msg = actionMessage
+                if (msg != null) {
+                    val isError = msg is HomeActionMessage.Error
+                    val text = when (msg) {
+                        is HomeActionMessage.Success -> msg.text
+                        is HomeActionMessage.Error -> msg.text
+                    }
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isError)
+                                MaterialTheme.colorScheme.errorContainer
+                            else
+                                Color(0xFFE8F5E9)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (isError) Icons.Default.Warning else Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = if (isError) MaterialTheme.colorScheme.error else Color(0xFF2E7D32),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = text,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isError)
+                                    MaterialTheme.colorScheme.onErrorContainer
+                                else
+                                    Color(0xFF1B5E20),
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = { viewModel.clearActionMessage() },
+                                modifier = Modifier.size(26.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Cerrar",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = if (isError)
+                                        MaterialTheme.colorScheme.onErrorContainer
+                                    else
+                                        Color(0xFF1B5E20)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             when (val state = uiState) {
@@ -169,6 +235,7 @@ fun HomeScreen(
                 is HomeUiState.Success -> {
                     MedicationsListContent(
                         doses = state.doses,
+                        onMarkAsCompleted = { doseId -> viewModel.markDoseAsCompleted(doseId) },
                         onToggleDose = { doseId -> viewModel.toggleDoseStatus(doseId) },
                         onConfigureDoseSchedule = { doseId -> onNavigateToConfigureSchedule(doseId) }
                     )
@@ -280,6 +347,7 @@ private fun UserGreetingCard(
 @Composable
 private fun MedicationsListContent(
     doses: List<MedicationDose>,
+    onMarkAsCompleted: (String) -> Unit,
     onToggleDose: (String) -> Unit,
     onConfigureDoseSchedule: (String) -> Unit = {},
 ) {
@@ -310,7 +378,7 @@ private fun MedicationsListContent(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "$completedCount de $totalCount completadas",
+                        text = "$completedCount de $totalCount realizadas",
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.primary
@@ -340,6 +408,7 @@ private fun MedicationsListContent(
             ) { dose ->
                 MedicationDoseCard(
                     dose = dose,
+                    onMarkAsCompleted = { onMarkAsCompleted(dose.id) },
                     onToggle = { onToggleDose(dose.id) },
                     onConfigureSchedule = { onConfigureDoseSchedule(dose.id) }
                 )
@@ -351,6 +420,7 @@ private fun MedicationsListContent(
 @Composable
 private fun MedicationDoseCard(
     dose: MedicationDose,
+    onMarkAsCompleted: () -> Unit,
     onToggle: () -> Unit,
     onConfigureSchedule: () -> Unit = {},
 ) {
@@ -363,9 +433,7 @@ private fun MedicationDoseCard(
     )
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onToggle() },
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = cardBgColor),
         elevation = CardDefaults.cardElevation(defaultElevation = if (dose.isCompleted) 1.dp else 4.dp)
@@ -460,7 +528,7 @@ private fun MedicationDoseCard(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Badge de Estado Visually Distinct (Pendiente vs Realizada)
+                    // Badge de Estado: "Realizado" vs "Pendiente"
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = if (dose.isCompleted) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
@@ -478,7 +546,7 @@ private fun MedicationDoseCard(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (dose.isCompleted) "Realizada" else "Pendiente",
+                                text = if (dose.isCompleted) "Realizado" else "Pendiente",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (dose.isCompleted) Color(0xFF2E7D32) else Color(0xFFE65100)
@@ -504,6 +572,30 @@ private fun MedicationDoseCard(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
+                }
+            }
+
+            // Opción explícita "Marcar como realizado" en cada recordatorio pendiente
+            if (!dose.isCompleted) {
+                Spacer(modifier = Modifier.height(10.dp))
+                FilledTonalButton(
+                    onClick = onMarkAsCompleted,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Marcar como realizado",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
                 }
             }
         }
