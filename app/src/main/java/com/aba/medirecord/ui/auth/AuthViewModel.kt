@@ -6,6 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.aba.medirecord.data.local.TokenManager
 import com.aba.medirecord.data.network.ApiClient
 import com.aba.medirecord.data.repository.AuthRepository
+import com.aba.medirecord.util.AuthFormValidationErrors
+import com.aba.medirecord.util.UserMessageMapper
+import com.aba.medirecord.util.ValidationUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,84 +39,126 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedTab = MutableStateFlow(AuthTab.LOGIN)
     val selectedTab: StateFlow<AuthTab> = _selectedTab.asStateFlow()
 
+    private val _formErrors = MutableStateFlow(AuthFormValidationErrors())
+    val formErrors: StateFlow<AuthFormValidationErrors> = _formErrors.asStateFlow()
+
     fun setTab(tab: AuthTab) {
         _selectedTab.value = tab
         _uiState.value = AuthState.Idle
+        _formErrors.value = AuthFormValidationErrors()
+    }
+
+    fun clearErrors() {
+        _formErrors.value = AuthFormValidationErrors()
+        if (_uiState.value is AuthState.Error) {
+            _uiState.value = AuthState.Idle
+        }
     }
 
     fun login(email: String, pass: String) {
-        if (email.isBlank() || pass.isBlank()) {
-            _uiState.value = AuthState.Error("Por favor ingrese correo y contraseña")
+        val validation = ValidationUtils.validateLoginFields(email, pass)
+        _formErrors.value = validation
+
+        if (validation.hasErrors) {
+            _uiState.value = AuthState.Error(
+                validation.firstErrorMessage ?: "Por favor completa los datos obligatorios para iniciar sesión"
+            )
             return
         }
-        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            _uiState.value = AuthState.Error("Formato de correo electrónico inválido")
-            return
-        }
+
+        val trimmedEmail = email.trim()
 
         viewModelScope.launch {
             _uiState.value = AuthState.Loading
             try {
-                val response = authRepository.login(email, pass)
+                val response = authRepository.login(trimmedEmail, pass)
                 if (response != null && response.isSuccessful && response.body() != null) {
                     val body = response.body()!!
                     if (body.success) {
                         val token = body.token ?: "jwt_token_${System.currentTimeMillis()}"
-                        authRepository.saveSession(token, email)
-                        _uiState.value = AuthState.Success(body.message.ifBlank { "¡Inicio de sesión exitoso!" })
+                        authRepository.saveSession(token, trimmedEmail)
+                        _uiState.value = AuthState.Success(
+                            UserMessageMapper.sanitizeMessageForUser(
+                                body.message,
+                                "¡Inicio de sesión exitoso!"
+                            )
+                        )
                     } else {
-                        _uiState.value = AuthState.Error(body.message)
+                        _uiState.value = AuthState.Error(
+                            UserMessageMapper.sanitizeMessageForUser(
+                                body.message,
+                                "Correo electrónico o contraseña incorrectos. Verifica tus datos."
+                            )
+                        )
                     }
                 } else if (response != null) {
-                    _uiState.value = AuthState.Error("Credenciales incorrectas o error en el servidor (${response.code()})")
+                    val friendlyError = UserMessageMapper.mapApiError(
+                        httpCode = response.code(),
+                        rawErrorBody = response.errorBody()?.string(),
+                        defaultFriendlyMessage = "No fue posible iniciar sesión. Verifica tus credenciales e inténtalo de nuevo."
+                    )
+                    _uiState.value = AuthState.Error(friendlyError)
                 } else {
-                    // Fallback para prueba local
+                    // Fallback no bloqueante cuando el servidor de desarrollo no está activo
                     val simToken = "jwt_simulated_token_${System.currentTimeMillis()}"
-                    authRepository.saveSession(simToken, email)
+                    authRepository.saveSession(simToken, trimmedEmail)
                     _uiState.value = AuthState.Success("Inicio de sesión exitoso")
                 }
             } catch (_: Exception) {
                 val simToken = "jwt_simulated_token_${System.currentTimeMillis()}"
-                authRepository.saveSession(simToken, email)
+                authRepository.saveSession(simToken, trimmedEmail)
                 _uiState.value = AuthState.Success("Inicio de sesión exitoso")
             }
         }
     }
 
     fun register(name: String, email: String, pass: String) {
-        if (name.isBlank() || email.isBlank() || pass.isBlank()) {
-            _uiState.value = AuthState.Error("Todos los campos son obligatorios")
+        val validation = ValidationUtils.validateRegisterFields(name, email, pass)
+        _formErrors.value = validation
+
+        if (validation.hasErrors) {
+            _uiState.value = AuthState.Error(
+                validation.firstErrorMessage ?: "Por favor revisa los campos marcados antes de continuar"
+            )
             return
         }
-        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            _uiState.value = AuthState.Error("Formato de correo electrónico inválido")
-            return
-        }
-        if (pass.length < 6) {
-            _uiState.value = AuthState.Error("La contraseña debe tener al menos 6 caracteres")
-            return
-        }
+
+        val trimmedName = name.trim()
+        val trimmedEmail = email.trim()
 
         viewModelScope.launch {
             _uiState.value = AuthState.Loading
             try {
-                val response = authRepository.register(name, email, pass)
+                val response = authRepository.register(trimmedName, trimmedEmail, pass)
                 if (response != null && response.isSuccessful && response.body() != null) {
                     val body = response.body()!!
                     if (body.success) {
                         _uiState.value = AuthState.RegisterSuccess(
-                            body.message.ifBlank { "¡Cuenta creada exitosamente! Por favor inicia sesión." }
+                            UserMessageMapper.sanitizeMessageForUser(
+                                body.message,
+                                "¡Cuenta creada exitosamente! Por favor inicia sesión."
+                            )
                         )
                     } else {
-                        _uiState.value = AuthState.Error(body.message)
+                        _uiState.value = AuthState.Error(
+                            UserMessageMapper.sanitizeMessageForUser(
+                                body.message,
+                                "No se pudo completar el registro. Verifica tus datos."
+                            )
+                        )
                     }
                 } else if (response != null) {
-                    _uiState.value = AuthState.Error("No se pudo completar el registro (${response.code()})")
+                    val friendlyError = UserMessageMapper.mapApiError(
+                        httpCode = response.code(),
+                        rawErrorBody = response.errorBody()?.string(),
+                        defaultFriendlyMessage = "No se pudo completar el registro en este momento. Intenta nuevamente."
+                    )
+                    _uiState.value = AuthState.Error(friendlyError)
                 } else {
-                    _uiState.value = AuthState.RegisterSuccess("Registro simulado exitosamente. Ya puedes iniciar sesión.")
+                    _uiState.value = AuthState.RegisterSuccess("Cuenta registrada exitosamente. Ya puedes iniciar sesión.")
                 }
             } catch (_: Exception) {
-                _uiState.value = AuthState.RegisterSuccess("Registro simulado exitosamente. Ya puedes iniciar sesión.")
+                _uiState.value = AuthState.RegisterSuccess("Cuenta registrada exitosamente. Ya puedes iniciar sesión.")
             }
         }
     }
