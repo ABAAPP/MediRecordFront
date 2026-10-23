@@ -14,12 +14,14 @@ import com.aba.medirecord.data.local.TokenManager
 import com.aba.medirecord.ui.auth.AuthScreen
 import com.aba.medirecord.ui.home.HomeScreen
 import com.aba.medirecord.ui.medication.AddMedicationScreen
+import com.aba.medirecord.ui.reminders.RemindersScreen
 import com.aba.medirecord.ui.schedule.ScheduleConfigScreen
 
 object Screen {
     const val AUTH = "auth"
     const val HOME = "home"
     const val ADD_MEDICATION = "add_medication"
+    const val REMINDERS = "reminders"
     const val CONFIGURE_SCHEDULE = "configure_schedule"
     const val CONFIGURE_SCHEDULE_ROUTE = "configure_schedule?medicationId={medicationId}"
 
@@ -66,6 +68,9 @@ fun AppNavGraph(
                 onNavigateToConfigureSchedule = { medicationId ->
                     navController.navigate(Screen.configureScheduleRoute(medicationId))
                 },
+                onNavigateToReminders = {
+                    navController.navigate(Screen.REMINDERS)
+                },
                 onLogout = {
                     tokenManager.clearSession()
                     Toast.makeText(context, "Sesión cerrada", Toast.LENGTH_SHORT).show()
@@ -84,6 +89,18 @@ fun AppNavGraph(
                 onMedicationAdded = {
                     Toast.makeText(context, "Medicamento guardado en tu agenda", Toast.LENGTH_SHORT).show()
                     navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.REMINDERS) {
+            RemindersScreen(
+                userEmail = tokenManager.getUserEmail(),
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToConfigureSchedule = { medicationId ->
+                    navController.navigate(Screen.configureScheduleRoute(medicationId))
                 }
             )
         }
