@@ -213,6 +213,7 @@ fun RemindersScreen(
                         completingReminderId = completingReminderId,
                         onFilterSelected = { filter -> viewModel.setFilter(filter) },
                         onMarkAsCompleted = { id -> viewModel.markReminderAsCompleted(id) },
+                        onSendNotification = { rem -> viewModel.sendReminderNotificationNow(rem) },
                         onEditSchedule = { medId -> onNavigateToConfigureSchedule(medId) }
                     )
                 }
@@ -230,6 +231,7 @@ private fun RemindersSuccessContent(
     completingReminderId: String?,
     onFilterSelected: (ReminderFilter) -> Unit,
     onMarkAsCompleted: (String) -> Unit,
+    onSendNotification: (MedicationReminder) -> Unit = {},
     onEditSchedule: (String) -> Unit,
 ) {
     val pendingCount = allReminders.count { !it.isCompleted }
@@ -340,6 +342,7 @@ private fun RemindersSuccessContent(
                         reminder = reminder,
                         isCompleting = completingReminderId == reminder.id,
                         onMarkAsCompleted = { onMarkAsCompleted(reminder.id) },
+                        onSendNotification = { onSendNotification(reminder) },
                         onEditSchedule = { onEditSchedule(reminder.medicationId) }
                     )
                 }
@@ -394,6 +397,7 @@ private fun ReminderItemCard(
     reminder: MedicationReminder,
     isCompleting: Boolean,
     onMarkAsCompleted: () -> Unit,
+    onSendNotification: () -> Unit = {},
     onEditSchedule: () -> Unit,
 ) {
     val isCompleted = reminder.isCompleted
@@ -573,43 +577,70 @@ private fun ReminderItemCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Acción "Marcar como realizado" en cada recordatorio pendiente (Criterios 1, 2 y 5)
+            // Acción "Marcar como realizado" y prueba de notificación en cada recordatorio pendiente
             if (!isCompleted) {
-                Button(
-                    onClick = onMarkAsCompleted,
-                    enabled = !isCompleting,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (isCompleting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Confirmando toma...",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                    } else {
+                    OutlinedButton(
+                        onClick = onSendNotification,
+                        modifier = Modifier
+                            .weight(0.45f)
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
                         Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "Enviar notificación",
+                            modifier = Modifier.size(16.dp)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Marcar como realizado",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
+                            text = "Notificar",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp
                         )
+                    }
+
+                    Button(
+                        onClick = onMarkAsCompleted,
+                        enabled = !isCompleting,
+                        modifier = Modifier
+                            .weight(0.55f)
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        if (isCompleting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Guardando...",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Marcar realizado",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
                     }
                 }
             } else {
