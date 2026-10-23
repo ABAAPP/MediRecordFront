@@ -152,7 +152,7 @@ class MedicationRepository(
             return if (persistedTime != null) {
                 reminder.copy(
                     isCompleted = true,
-                    completedAt = reminder.completedAt ?: persistedTime
+                    completedAt = persistedTime
                 )
             } else {
                 reminder
@@ -164,7 +164,7 @@ class MedicationRepository(
             return if (persistedTime != null) {
                 dose.copy(
                     isCompleted = true,
-                    completedAt = dose.completedAt ?: persistedTime
+                    completedAt = persistedTime
                 )
             } else {
                 dose
@@ -350,7 +350,9 @@ class MedicationRepository(
             }
             if (response != null && response.isSuccessful && response.body() != null) {
                 val body = response.body()!!
-                val newDose = body.medication ?: MedicationDose(
+                val newDose = body.medication?.copy(
+                    userEmail = body.medication.userEmail ?: request.userEmail?.trim()?.lowercase()
+                ) ?: MedicationDose(
                     id = body.medicationId ?: UUID.randomUUID().toString(),
                     name = request.name,
                     dosage = request.dosage,
@@ -358,7 +360,8 @@ class MedicationRepository(
                     isCompleted = false,
                     instructions = request.instructions,
                     frequency = request.frequency,
-                    selectedDays = ALL_WEEK_DAYS
+                    selectedDays = ALL_WEEK_DAYS,
+                    userEmail = request.userEmail?.trim()?.lowercase()
                 )
                 localDoses.add(newDose)
                 Result.success(body)
@@ -380,7 +383,8 @@ class MedicationRepository(
                     isCompleted = false,
                     instructions = request.instructions,
                     frequency = request.frequency,
-                    selectedDays = ALL_WEEK_DAYS
+                    selectedDays = ALL_WEEK_DAYS,
+                    userEmail = request.userEmail?.trim()?.lowercase()
                 )
                 localDoses.add(newDose)
                 Result.success(
@@ -401,7 +405,8 @@ class MedicationRepository(
                 isCompleted = false,
                 instructions = request.instructions,
                 frequency = request.frequency,
-                selectedDays = ALL_WEEK_DAYS
+                selectedDays = ALL_WEEK_DAYS,
+                userEmail = request.userEmail?.trim()?.lowercase()
             )
             localDoses.add(newDose)
             Result.success(

@@ -9,6 +9,7 @@ import com.aba.medirecord.data.network.ApiClient
 import com.aba.medirecord.data.repository.MedicationRepository
 import com.aba.medirecord.notifications.ReminderNotificationManager
 import com.aba.medirecord.notifications.ReminderNotificationPayload
+import com.aba.medirecord.util.ValidationUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -105,10 +106,9 @@ class ScheduleConfigViewModel @JvmOverloads constructor(
             }
 
             // 2. Validar hora de toma
-            val timeRegex = Regex("^\\d{1,2}:\\d{2}(\\s?(AM|PM|am|pm))?$")
             if (trimmedTime.isEmpty()) {
                 timeErr = "Debes establecer una hora de toma"
-            } else if (!timeRegex.matches(trimmedTime)) {
+            } else if (!ValidationUtils.isValidTimeFormat(trimmedTime)) {
                 timeErr = "Formato de hora inválido (ej. 08:00 AM)"
             }
 

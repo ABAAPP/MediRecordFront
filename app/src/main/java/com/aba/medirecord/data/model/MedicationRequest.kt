@@ -7,5 +7,6 @@ data class MedicationRequest(
     val endDate: String? = null,
     val frequency: String,
     val scheduledTime: String,
-    val instructions: String? = null
+    val instructions: String? = null,
+    val userEmail: String? = null,
 )
