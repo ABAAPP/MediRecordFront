@@ -3,6 +3,8 @@ package com.aba.medirecord.data.repository
 import com.aba.medirecord.data.model.MedicationDose
 import com.aba.medirecord.data.model.MedicationRequest
 import com.aba.medirecord.data.model.MedicationResponse
+import com.aba.medirecord.data.model.ScheduleRequest
+import com.aba.medirecord.data.model.ScheduleResponse
 import com.aba.medirecord.data.network.ApiService
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
@@ -11,12 +13,50 @@ class MedicationRepository(
     private val apiService: ApiService,
 ) {
     companion object {
+        val ALL_WEEK_DAYS = listOf("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
+
         // Lista compartida en memoria para simulación cuando no hay backend activo
         val localDoses = mutableListOf(
-            MedicationDose("1", "Paracetamol", "500 mg - 1 tableta", "08:00 AM", isCompleted = true, instructions = "Con alimentos"),
-            MedicationDose("2", "Omeprazol", "20 mg - 1 cápsula", "09:00 AM", isCompleted = false, instructions = "En ayunas"),
-            MedicationDose("3", "Amoxicilina", "500 mg - 1 cápsula", "02:00 PM", isCompleted = false, instructions = "Tomar con agua"),
-            MedicationDose("4", "Ibuprofeno", "400 mg - 1 tableta", "08:00 PM", isCompleted = false, instructions = "Después de cenar"),
+            MedicationDose(
+                id = "1",
+                name = "Paracetamol",
+                dosage = "500 mg - 1 tableta",
+                scheduledTime = "08:00 AM",
+                isCompleted = true,
+                instructions = "Con alimentos",
+                frequency = "Cada 8 horas (3 veces al día)",
+                selectedDays = ALL_WEEK_DAYS
+            ),
+            MedicationDose(
+                id = "2",
+                name = "Omeprazol",
+                dosage = "20 mg - 1 cápsula",
+                scheduledTime = "09:00 AM",
+                isCompleted = false,
+                instructions = "En ayunas",
+                frequency = "Todos los días (Diario)",
+                selectedDays = ALL_WEEK_DAYS
+            ),
+            MedicationDose(
+                id = "3",
+                name = "Amoxicilina",
+                dosage = "500 mg - 1 cápsula",
+                scheduledTime = "02:00 PM",
+                isCompleted = false,
+                instructions = "Tomar con agua",
+                frequency = "Cada 8 horas (3 veces al día)",
+                selectedDays = ALL_WEEK_DAYS
+            ),
+            MedicationDose(
+                id = "4",
+                name = "Ibuprofeno",
+                dosage = "400 mg - 1 tableta",
+                scheduledTime = "08:00 PM",
+                isCompleted = false,
+                instructions = "Después de cenar",
+                frequency = "Días específicos de la semana",
+                selectedDays = listOf("Lunes", "Miércoles", "Viernes")
+            ),
         )
     }
 
@@ -48,7 +88,9 @@ class MedicationRepository(
                     dosage = request.dosage,
                     scheduledTime = request.scheduledTime,
                     isCompleted = false,
-                    instructions = request.instructions
+                    instructions = request.instructions,
+                    frequency = request.frequency,
+                    selectedDays = ALL_WEEK_DAYS
                 )
                 localDoses.add(newDose)
                 Result.success(body)
@@ -64,7 +106,9 @@ class MedicationRepository(
                     dosage = request.dosage,
                     scheduledTime = request.scheduledTime,
                     isCompleted = false,
-                    instructions = request.instructions
+                    instructions = request.instructions,
+                    frequency = request.frequency,
+                    selectedDays = ALL_WEEK_DAYS
                 )
                 localDoses.add(newDose)
                 Result.success(
@@ -83,7 +127,9 @@ class MedicationRepository(
                 dosage = request.dosage,
                 scheduledTime = request.scheduledTime,
                 isCompleted = false,
-                instructions = request.instructions
+                instructions = request.instructions,
+                frequency = request.frequency,
+                selectedDays = ALL_WEEK_DAYS
             )
             localDoses.add(newDose)
             Result.success(
@@ -94,6 +140,77 @@ class MedicationRepository(
                     medication = newDose
                 )
             )
+        }
+    }
+
+    suspend fun saveMedicationSchedule(request: ScheduleRequest): Result<ScheduleResponse> {
+        return try {
+            val response = withTimeoutOrNull(2000L) {
+                apiService.saveMedicationSchedule(request)
+            }
+            if (response != null && response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                updateLocalSchedule(request, body.updatedMedication)
+                Result.success(body)
+            } else if (response != null && !response.isSuccessful) {
+                val errorMsg = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
+                    ?: "Error del servidor al guardar el horario (${response.code()})"
+                Result.failure(Exception(errorMsg))
+            } else {
+                // Modo offline / simulación sincronizada
+                val updated = updateLocalSchedule(request, null)
+                Result.success(
+                    ScheduleResponse(
+                        success = true,
+                        message = "Horario configurado correctamente para '${request.medicationName}' a las ${request.scheduledTime}",
+                        scheduleId = UUID.randomUUID().toString(),
+                        updatedMedication = updated
+                    )
+                )
+            }
+        } catch (_: Exception) {
+            val updated = updateLocalSchedule(request, null)
+            Result.success(
+                ScheduleResponse(
+                    success = true,
+                    message = "Horario configurado correctamente para '${request.medicationName}' a las ${request.scheduledTime}",
+                    scheduleId = UUID.randomUUID().toString(),
+                    updatedMedication = updated
+                )
+            )
+        }
+    }
+
+    private fun updateLocalSchedule(
+        request: ScheduleRequest,
+        serverMedication: MedicationDose?,
+    ): MedicationDose {
+        val index = localDoses.indexOfFirst {
+            it.id == request.medicationId || it.name.equals(request.medicationName, ignoreCase = true)
+        }
+        return if (index != -1) {
+            val current = localDoses[index]
+            val updated = serverMedication ?: current.copy(
+                scheduledTime = request.scheduledTime,
+                frequency = request.frequency,
+                selectedDays = request.selectedDays,
+                instructions = if (!request.notes.isNullOrBlank()) request.notes else current.instructions
+            )
+            localDoses[index] = updated
+            updated
+        } else {
+            val newDose = serverMedication ?: MedicationDose(
+                id = request.medicationId.ifBlank { UUID.randomUUID().toString() },
+                name = request.medicationName,
+                dosage = "Dosis estándar",
+                scheduledTime = request.scheduledTime,
+                isCompleted = false,
+                instructions = request.notes,
+                frequency = request.frequency,
+                selectedDays = request.selectedDays
+            )
+            localDoses.add(newDose)
+            newDose
         }
     }
 

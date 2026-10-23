@@ -13,6 +13,7 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
@@ -40,6 +41,7 @@ fun HomeScreen(
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
     onNavigateToAddMedication: () -> Unit = {},
+    onNavigateToConfigureSchedule: (String?) -> Unit = {},
     viewModel: HomeViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -72,6 +74,13 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { onNavigateToConfigureSchedule(null) }) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "Configurar horarios",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     IconButton(onClick = { viewModel.loadTodayMedications() }) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
@@ -123,7 +132,8 @@ fun HomeScreen(
             // Card de Saludo e Identificación de Usuario Authenticated
             UserGreetingCard(
                 userEmail = userEmail,
-                currentDateStr = currentDateStr
+                currentDateStr = currentDateStr,
+                onConfigureSchedulesClick = { onNavigateToConfigureSchedule(null) }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -157,7 +167,8 @@ fun HomeScreen(
                 is HomeUiState.Success -> {
                     MedicationsListContent(
                         doses = state.doses,
-                        onToggleDose = { doseId -> viewModel.toggleDoseStatus(doseId) }
+                        onToggleDose = { doseId -> viewModel.toggleDoseStatus(doseId) },
+                        onConfigureDoseSchedule = { doseId -> onNavigateToConfigureSchedule(doseId) }
                     )
                 }
             }
@@ -169,6 +180,7 @@ fun HomeScreen(
 private fun UserGreetingCard(
     userEmail: String?,
     currentDateStr: String,
+    onConfigureSchedulesClick: () -> Unit = {},
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -180,19 +192,46 @@ private fun UserGreetingCard(
         Column(
             modifier = Modifier.padding(20.dp)
         ) {
-            Text(
-                text = "¡Hola!",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            if (!userEmail.isNullOrEmpty()) {
-                Text(
-                    text = userEmail,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "¡Hola!",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    if (!userEmail.isNullOrEmpty()) {
+                        Text(
+                            text = userEmail,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                        )
+                    }
+                }
+
+                FilledTonalButton(
+                    onClick = onConfigureSchedulesClick,
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Configurar Horarios",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
+
             Spacer(modifier = Modifier.height(10.dp))
             Row(
                 verticalAlignment = Alignment.CenterVertically
@@ -219,6 +258,7 @@ private fun UserGreetingCard(
 private fun MedicationsListContent(
     doses: List<MedicationDose>,
     onToggleDose: (String) -> Unit,
+    onConfigureDoseSchedule: (String) -> Unit = {},
 ) {
     val completedCount = doses.count { it.isCompleted }
     val totalCount = doses.size
@@ -269,7 +309,7 @@ private fun MedicationsListContent(
         // Lista Organizada de Medicamentos y Tomas
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(bottom = 24.dp)
+            contentPadding = PaddingValues(bottom = 80.dp)
         ) {
             items(
                 items = doses,
@@ -277,7 +317,8 @@ private fun MedicationsListContent(
             ) { dose ->
                 MedicationDoseCard(
                     dose = dose,
-                    onToggle = { onToggleDose(dose.id) }
+                    onToggle = { onToggleDose(dose.id) },
+                    onConfigureSchedule = { onConfigureDoseSchedule(dose.id) }
                 )
             }
         }
@@ -288,11 +329,12 @@ private fun MedicationsListContent(
 private fun MedicationDoseCard(
     dose: MedicationDose,
     onToggle: () -> Unit,
+    onConfigureSchedule: () -> Unit = {},
 ) {
     val cardBgColor by animateColorAsState(
-        targetValue = if (dose.isCompleted) 
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) 
-        else 
+        targetValue = if (dose.isCompleted)
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        else
             MaterialTheme.colorScheme.surface,
         label = "cardBg"
     )
@@ -305,99 +347,140 @@ private fun MedicationDoseCard(
         colors = CardDefaults.cardColors(containerColor = cardBgColor),
         elevation = CardDefaults.cardElevation(defaultElevation = if (dose.isCompleted) 1.dp else 4.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(16.dp)
         ) {
-            // Icono / Horario con Badge
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(
-                        if (dose.isCompleted) 
-                            Color(0xFF4CAF50).copy(alpha = 0.15f) 
-                        else 
-                            MaterialTheme.colorScheme.primaryContainer
-                    ),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = if (dose.isCompleted) Icons.Default.CheckCircle else Icons.Default.Notifications,
-                    contentDescription = null,
-                    tint = if (dose.isCompleted) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            // Información del Medicamento y Dosis
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = dose.name,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        textDecoration = if (dose.isCompleted) TextDecoration.LineThrough else TextDecoration.None
-                    ),
-                    color = if (dose.isCompleted) 
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f) 
-                    else 
-                        MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = dose.dosage,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "⏰ ${dose.scheduledTime}",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = if (dose.isCompleted) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
-                        )
+                // Icono / Horario con Badge
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(
+                            if (dose.isCompleted)
+                                Color(0xFF4CAF50).copy(alpha = 0.15f)
+                            else
+                                MaterialTheme.colorScheme.primaryContainer
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (dose.isCompleted) Icons.Default.CheckCircle else Icons.Default.Notifications,
+                        contentDescription = null,
+                        tint = if (dose.isCompleted) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
                     )
-                    if (!dose.instructions.isNullOrBlank()) {
+                }
+
+                Spacer(modifier = Modifier.width(14.dp))
+
+                // Información del Medicamento y Dosis
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = dose.name,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            textDecoration = if (dose.isCompleted) TextDecoration.LineThrough else TextDecoration.None
+                        ),
+                        color = if (dose.isCompleted)
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        else
+                            MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = dose.dosage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = " • ${dose.instructions}",
+                            text = "⏰ ${dose.scheduledTime}",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = if (dose.isCompleted) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
+                            )
+                        )
+                        if (!dose.instructions.isNullOrBlank()) {
+                            Text(
+                                text = " • ${dose.instructions}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    if (!dose.frequency.isNullOrBlank()) {
+                        val daysText = when {
+                            dose.selectedDays.isEmpty() || dose.selectedDays.size == 7 -> ""
+                            else -> " (${dose.selectedDays.joinToString(", ") { it.take(3) }})"
+                        }
+                        Text(
+                            text = "📅 ${dose.frequency}$daysText",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp)
                         )
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
-            // Badge de Estado Visually Distinct (Pendiente vs Realizada)
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = if (dose.isCompleted) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
-                modifier = Modifier.clickable { onToggle() }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(if (dose.isCompleted) Color(0xFF2E7D32) else Color(0xFFE65100))
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = if (dose.isCompleted) "Realizada" else "Pendiente",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (dose.isCompleted) Color(0xFF2E7D32) else Color(0xFFE65100)
-                    )
+                    // Badge de Estado Visually Distinct (Pendiente vs Realizada)
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (dose.isCompleted) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
+                        modifier = Modifier.clickable { onToggle() }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (dose.isCompleted) Color(0xFF2E7D32) else Color(0xFFE65100))
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (dose.isCompleted) "Realizada" else "Pendiente",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (dose.isCompleted) Color(0xFF2E7D32) else Color(0xFFE65100)
+                            )
+                        }
+                    }
+
+                    // Botón rápido para configurar horario de este medicamento
+                    TextButton(
+                        onClick = onConfigureSchedule,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Configurar horario",
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Horario",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }

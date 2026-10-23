@@ -7,4 +7,6 @@ data class MedicationDose(
     val scheduledTime: String,
     val isCompleted: Boolean = false,
     val instructions: String? = null,
+    val frequency: String? = null,
+    val selectedDays: List<String> = emptyList(),
 )
