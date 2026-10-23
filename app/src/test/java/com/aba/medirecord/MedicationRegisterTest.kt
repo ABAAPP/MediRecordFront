@@ -30,11 +30,25 @@ class FakeApiService : ApiService {
     var lastQueriedUserEmail: String? = null
 
     override suspend fun register(request: RegisterRequest): Response<RegisterResponse> {
-        return Response.success(RegisterResponse(true, "OK"))
+        return if (shouldFail) {
+            Response.error(409, okhttp3.ResponseBody.create(null, "El correo electrónico ya está registrado"))
+        } else {
+            Response.success(RegisterResponse(true, "Usuario '${request.name}' registrado exitosamente"))
+        }
     }
 
     override suspend fun login(request: LoginRequest): Response<LoginResponse> {
-        return Response.success(LoginResponse(true, "token", "OK"))
+        return if (shouldFail) {
+            Response.error(401, okhttp3.ResponseBody.create(null, "Credenciales inválidas"))
+        } else {
+            Response.success(
+                LoginResponse(
+                    success = true,
+                    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.medirecord.signature",
+                    message = "Autenticación exitosa"
+                )
+            )
+        }
     }
 
     override suspend fun getTodayMedications(
