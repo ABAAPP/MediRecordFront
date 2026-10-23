@@ -7,6 +7,8 @@ import com.aba.medirecord.data.local.TokenManager
 import com.aba.medirecord.data.model.MedicationReminder
 import com.aba.medirecord.data.network.ApiClient
 import com.aba.medirecord.data.repository.MedicationRepository
+import com.aba.medirecord.notifications.ReminderNotificationManager
+import com.aba.medirecord.notifications.ReminderNotificationPayload
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -90,6 +92,7 @@ class RemindersViewModel @JvmOverloads constructor(
             repository.getRemindersForUser(resolvedEmail)
                 .onSuccess { reminders ->
                     cachedReminders = reminders
+                    schedulePendingNotifications(reminders)
                     if (reminders.isEmpty()) {
                         _uiState.value = RemindersUiState.Empty(resolvedEmail)
                     } else {
@@ -106,6 +109,51 @@ class RemindersViewModel @JvmOverloads constructor(
                         error.message ?: "No se pudieron cargar los recordatorios del usuario"
                     )
                 }
+        }
+    }
+
+    private fun schedulePendingNotifications(reminders: List<MedicationReminder>) {
+        reminders.filter { !it.isCompleted }.forEach { reminder ->
+            val payload = ReminderNotificationPayload(
+                reminderId = reminder.id,
+                medicationId = reminder.medicationId,
+                medicationName = reminder.medicationName,
+                dosage = reminder.dosage,
+                scheduledTime = reminder.scheduledTime,
+                frequency = reminder.frequency,
+                selectedDays = reminder.selectedDays,
+                instructions = reminder.instructions
+            )
+            ReminderNotificationManager.scheduleNotificationForConfiguredTime(
+                context = getApplication(),
+                payload = payload
+            )
+        }
+    }
+
+    fun sendReminderNotificationNow(reminder: MedicationReminder) {
+        val payload = ReminderNotificationPayload(
+            reminderId = reminder.id,
+            medicationId = reminder.medicationId,
+            medicationName = reminder.medicationName,
+            dosage = reminder.dosage,
+            scheduledTime = reminder.scheduledTime,
+            frequency = reminder.frequency,
+            selectedDays = reminder.selectedDays,
+            instructions = reminder.instructions
+        )
+
+        ReminderNotificationManager.triggerAndReceiveReminderNotification(
+            context = getApplication(),
+            payload = payload
+        ).onSuccess { event ->
+            _actionFeedback.value = ReminderActionFeedback.Success(
+                "Notificación enviada y recibida: ${event.title} (${event.scheduledTime})"
+            )
+        }.onFailure { error ->
+            _actionFeedback.value = ReminderActionFeedback.Error(
+                error.message ?: "No se pudo enviar la notificación del recordatorio"
+            )
         }
     }
 
@@ -128,7 +176,6 @@ class RemindersViewModel @JvmOverloads constructor(
 
             repository.markReminderAsCompleted(reminderId, currentEmail)
                 .onSuccess { response ->
-                    // Actualizar lista en memoria para reflejar inmediatamente el estado "Realizado"
                     cachedReminders = cachedReminders.map { item ->
                         if (item.id == reminderId || item.medicationId == reminderId) {
                             item.copy(
@@ -140,7 +187,6 @@ class RemindersViewModel @JvmOverloads constructor(
                         }
                     }
 
-                    // Volver a consultar al repositorio para asegurar sincronización persistente
                     repository.getRemindersForUser(currentEmail)
                         .onSuccess { refreshed ->
                             cachedReminders = refreshed

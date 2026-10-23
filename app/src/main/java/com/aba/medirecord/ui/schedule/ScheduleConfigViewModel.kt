@@ -7,6 +7,8 @@ import com.aba.medirecord.data.model.MedicationDose
 import com.aba.medirecord.data.model.ScheduleRequest
 import com.aba.medirecord.data.network.ApiClient
 import com.aba.medirecord.data.repository.MedicationRepository
+import com.aba.medirecord.notifications.ReminderNotificationManager
+import com.aba.medirecord.notifications.ReminderNotificationPayload
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -204,7 +206,29 @@ class ScheduleConfigViewModel @JvmOverloads constructor(
             _uiState.value = ScheduleConfigUiState.Loading
             repository.saveMedicationSchedule(request)
                 .onSuccess { response ->
-                    _medications.value = MedicationRepository.localDoses.toList()
+                    val updatedList = MedicationRepository.localDoses.toList()
+                    _medications.value = updatedList
+
+                    if (reminderEnabled) {
+                        val medDose = updatedList.find {
+                            it.id == request.medicationId || it.name.equals(request.medicationName, ignoreCase = true)
+                        }
+                        val payload = ReminderNotificationPayload(
+                            reminderId = request.medicationId,
+                            medicationId = request.medicationId,
+                            medicationName = request.medicationName,
+                            dosage = medDose?.dosage ?: "Dosis programada",
+                            scheduledTime = request.scheduledTime,
+                            frequency = request.frequency,
+                            selectedDays = request.selectedDays,
+                            instructions = request.notes ?: medDose?.instructions
+                        )
+                        ReminderNotificationManager.scheduleNotificationForConfiguredTime(
+                            context = getApplication(),
+                            payload = payload
+                        )
+                    }
+
                     _uiState.value = ScheduleConfigUiState.Success(
                         response.message.ifBlank {
                             "El horario de '${request.medicationName}' se guardó correctamente."
