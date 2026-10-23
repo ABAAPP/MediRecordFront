@@ -1,6 +1,7 @@
 package com.aba.medirecord.data.repository
 
 import com.aba.medirecord.data.model.MedicationDose
+import com.aba.medirecord.data.model.MedicationReminder
 import com.aba.medirecord.data.model.MedicationRequest
 import com.aba.medirecord.data.model.MedicationResponse
 import com.aba.medirecord.data.model.ScheduleRequest
@@ -58,6 +59,58 @@ class MedicationRepository(
                 selectedDays = listOf("Lunes", "Miércoles", "Viernes")
             ),
         )
+
+        fun parseTimeToMinutes(timeStr: String): Int {
+            val cleaned = timeStr.trim().uppercase()
+            val regex = Regex("^(\\d{1,2}):(\\d{2})(?:\\s*(AM|PM))?$")
+            val match = regex.find(cleaned) ?: return Int.MAX_VALUE
+            var hour = match.groupValues[1].toIntOrNull() ?: return Int.MAX_VALUE
+            val minute = match.groupValues[2].toIntOrNull() ?: return Int.MAX_VALUE
+            val amPm = match.groupValues[3]
+
+            if (amPm == "PM" && hour < 12) {
+                hour += 12
+            } else if (amPm == "AM" && hour == 12) {
+                hour = 0
+            }
+            return hour * 60 + minute
+        }
+
+        fun sortRemindersChronologically(reminders: List<MedicationReminder>): List<MedicationReminder> {
+            return reminders.sortedWith(
+                compareBy<MedicationReminder> { parseTimeToMinutes(it.scheduledTime) }
+                    .thenBy { it.medicationName.lowercase() }
+            )
+        }
+
+        fun filterRemindersForAuthenticatedUser(
+            reminders: List<MedicationReminder>,
+            authenticatedUserEmail: String?,
+        ): List<MedicationReminder> {
+            val normalizedAuthEmail = authenticatedUserEmail?.trim().orEmpty()
+            if (normalizedAuthEmail.isEmpty()) {
+                return emptyList()
+            }
+            return reminders.filter { reminder ->
+                reminder.userEmail.isNullOrBlank() ||
+                        reminder.userEmail.trim().equals(normalizedAuthEmail, ignoreCase = true)
+            }
+        }
+
+        fun MedicationDose.toReminder(defaultUserEmail: String? = null): MedicationReminder {
+            return MedicationReminder(
+                id = this.id,
+                medicationId = this.id,
+                medicationName = this.name,
+                dosage = this.dosage,
+                scheduledTime = this.scheduledTime,
+                frequency = this.frequency ?: "Todos los días (Diario)",
+                selectedDays = if (this.selectedDays.isNotEmpty()) this.selectedDays else ALL_WEEK_DAYS,
+                instructions = this.instructions,
+                isCompleted = this.isCompleted,
+                userEmail = this.userEmail ?: defaultUserEmail
+            )
+        }
     }
 
     suspend fun getTodayMedications(): Result<List<MedicationDose>> {
@@ -73,6 +126,40 @@ class MedicationRepository(
         } catch (_: Exception) {
             Result.success(localDoses.toList())
         }
+    }
+
+    suspend fun getRemindersForUser(userEmail: String?): Result<List<MedicationReminder>> {
+        val normalizedEmail = userEmail?.trim().orEmpty()
+        if (normalizedEmail.isEmpty()) {
+            return Result.failure(Exception("Debes iniciar sesión para visualizar tus recordatorios"))
+        }
+
+        return try {
+            val response = withTimeoutOrNull(1500L) {
+                apiService.getReminders(normalizedEmail)
+            }
+            if (response != null && response.isSuccessful && response.body() != null) {
+                val filtered = filterRemindersForAuthenticatedUser(response.body()!!, normalizedEmail)
+                Result.success(sortRemindersChronologically(filtered))
+            } else if (response != null && !response.isSuccessful) {
+                val errorMsg = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
+                    ?: "Error al obtener los recordatorios desde el servidor (${response.code()})"
+                Result.failure(Exception(errorMsg))
+            } else {
+                val localReminders = localDoses.map { it.toReminder(normalizedEmail) }
+                val filtered = filterRemindersForAuthenticatedUser(localReminders, normalizedEmail)
+                Result.success(sortRemindersChronologically(filtered))
+            }
+        } catch (_: Exception) {
+            val localReminders = localDoses.map { it.toReminder(normalizedEmail) }
+            val filtered = filterRemindersForAuthenticatedUser(localReminders, normalizedEmail)
+            Result.success(sortRemindersChronologically(filtered))
+        }
+    }
+
+    suspend fun toggleReminderStatus(reminderId: String, userEmail: String?): Result<List<MedicationReminder>> {
+        toggleDoseStatus(reminderId)
+        return getRemindersForUser(userEmail)
     }
 
     suspend fun registerMedication(request: MedicationRequest): Result<MedicationResponse> {
