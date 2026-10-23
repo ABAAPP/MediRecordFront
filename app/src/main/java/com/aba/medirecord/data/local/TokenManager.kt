@@ -10,19 +10,33 @@ class TokenManager(context: Context) {
     companion object {
         private const val KEY_JWT_TOKEN = "jwt_token"
         private const val KEY_USER_EMAIL = "user_email"
+
+        fun formatBearerHeader(token: String?): String? {
+            val trimmed = token?.trim().orEmpty()
+            if (trimmed.isEmpty()) return null
+            return if (trimmed.startsWith("Bearer ", ignoreCase = true)) {
+                trimmed
+            } else {
+                "Bearer $trimmed"
+            }
+        }
     }
 
     fun saveToken(token: String, email: String? = null) {
         val editor = prefs.edit()
-        editor.putString(KEY_JWT_TOKEN, token)
+        editor.putString(KEY_JWT_TOKEN, token.trim())
         if (email != null) {
-            editor.putString(KEY_USER_EMAIL, email)
+            editor.putString(KEY_USER_EMAIL, email.trim())
         }
         editor.apply()
     }
 
     fun getToken(): String? {
         return prefs.getString(KEY_JWT_TOKEN, null)
+    }
+
+    fun getAuthorizationHeader(): String? {
+        return formatBearerHeader(getToken())
     }
 
     fun getUserEmail(): String? {
