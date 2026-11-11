@@ -10,6 +10,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +26,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aba.medirecord.ui.components.PasswordRequirementsChecklist
 
 @Composable
 fun RegisterScreen(
@@ -162,9 +165,10 @@ fun RegisterScreen(
                         },
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Text(
-                                    text = if (passwordVisible) "🙈" else "👁️",
-                                    fontSize = 16.sp
+                                Icon(
+                                    imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña",
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                         },
@@ -182,7 +186,15 @@ fun RegisterScreen(
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Requisitos visibles de la contraseña que se van palomeando en tiempo real
+                    PasswordRequirementsChecklist(
+                        password = password,
+                        title = "Requisitos de seguridad para tu contraseña:"
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     if (uiState is RegisterState.Error) {
                         Surface(

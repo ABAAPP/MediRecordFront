@@ -17,6 +17,8 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -35,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aba.medirecord.ui.components.PasswordRequirementsChecklist
 
 @Composable
 fun AuthScreen(
@@ -219,9 +222,10 @@ fun AuthScreen(
                         },
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Text(
-                                    text = if (passwordVisible) "🙈" else "👁️",
-                                    fontSize = 16.sp
+                                Icon(
+                                    imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña",
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                         },
@@ -239,7 +243,19 @@ fun AuthScreen(
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    // Requisitos visibles de la contraseña que se van palomeando en tiempo real
+                    if (password.isNotEmpty() || selectedTab == AuthTab.REGISTER) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PasswordRequirementsChecklist(
+                            password = password,
+                            title = if (selectedTab == AuthTab.REGISTER)
+                                "Requisitos de seguridad para tu contraseña:"
+                            else
+                                "Validaciones de contraseña:"
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Mensaje de Error claro y comprensible si existe
                     if (uiState is AuthState.Error) {

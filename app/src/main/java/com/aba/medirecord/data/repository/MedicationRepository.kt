@@ -118,8 +118,10 @@ class MedicationRepository(
                 val matchesUser = if (normalizedEmail.isEmpty()) {
                     true
                 } else {
-                    dose.userEmail.isNullOrBlank() ||
-                            dose.userEmail.trim().equals(normalizedEmail, ignoreCase = true)
+                    val doseEmail = dose.userEmail?.trim().orEmpty()
+                    doseEmail.isEmpty() ||
+                            doseEmail.equals(normalizedEmail, ignoreCase = true) ||
+                            !doseEmail.contains("@") // El backend envía el usuarioId (UUID) del usuario autenticado
                 }
 
                 val matchesDate = if (normalizedDate.isEmpty() || dose.scheduledDate.isNullOrBlank()) {
@@ -141,8 +143,10 @@ class MedicationRepository(
                 return emptyList()
             }
             return reminders.filter { reminder ->
-                reminder.userEmail.isNullOrBlank() ||
-                        reminder.userEmail.trim().equals(normalizedAuthEmail, ignoreCase = true)
+                val remEmail = reminder.userEmail?.trim().orEmpty()
+                remEmail.isEmpty() ||
+                        remEmail.equals(normalizedAuthEmail, ignoreCase = true) ||
+                        !remEmail.contains("@") // El backend envía el usuarioId (UUID)
             }
         }
 
@@ -197,7 +201,7 @@ class MedicationRepository(
         val normalizedEmail = userEmail?.trim()?.ifBlank { null }
 
         return try {
-            val response = withTimeoutOrNull(1500L) {
+            val response = withTimeoutOrNull(5000L) {
                 apiService.getTodayMedications(date = queryDate, userEmail = normalizedEmail)
             }
             if (response != null && response.isSuccessful && response.body() != null) {
@@ -223,7 +227,7 @@ class MedicationRepository(
         }
 
         return try {
-            val response = withTimeoutOrNull(1500L) {
+            val response = withTimeoutOrNull(5000L) {
                 apiService.getReminders(normalizedEmail)
             }
             if (response != null && response.isSuccessful && response.body() != null) {
@@ -267,7 +271,7 @@ class MedicationRepository(
         )
 
         return try {
-            val response = withTimeoutOrNull(2000L) {
+            val response = withTimeoutOrNull(5000L) {
                 apiService.markReminderAsCompleted(trimmedId, request)
             }
             if (response != null && response.isSuccessful && response.body() != null) {
@@ -345,7 +349,7 @@ class MedicationRepository(
 
     suspend fun registerMedication(request: MedicationRequest): Result<MedicationResponse> {
         return try {
-            val response = withTimeoutOrNull(2000L) {
+            val response = withTimeoutOrNull(5000L) {
                 apiService.registerMedication(request)
             }
             if (response != null && response.isSuccessful && response.body() != null) {

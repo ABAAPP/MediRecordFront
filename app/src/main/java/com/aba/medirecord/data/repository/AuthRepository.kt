@@ -18,13 +18,13 @@ class AuthRepository(
     private var inMemoryEmail: String? = null
 
     suspend fun login(email: String, pass: String): Response<LoginResponse>? {
-        return withTimeoutOrNull(1500L) {
+        return withTimeoutOrNull(5000L) {
             apiService.login(LoginRequest(email.trim(), pass))
         }
     }
 
     suspend fun register(name: String, email: String, pass: String): Response<RegisterResponse>? {
-        return withTimeoutOrNull(1500L) {
+        return withTimeoutOrNull(5000L) {
             apiService.register(RegisterRequest(name.trim(), email.trim(), pass))
         }
     }
